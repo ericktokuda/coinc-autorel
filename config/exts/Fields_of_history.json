@@ -1,0 +1,9 @@
+{
+	"modeltop": ["ba","er","ws"],
+	"modeln": [162],
+	"modelk": [3.51],
+	"h": [2],
+	"extmodel": ["/scratch/tokuda/20221022-categs/Fields_of_history_es.tsv"],
+	"coincexp": [1],
+	"nruns":30
+}

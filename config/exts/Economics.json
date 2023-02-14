@@ -1,0 +1,9 @@
+{
+	"modeltop": ["ba","er","ws"],
+	"modeln": [438],
+	"modelk": [4.47],
+	"h": [2],
+	"extmodel": ["/scratch/tokuda/20221022-categs/Economics_es.tsv"],
+	"coincexp": [1],
+	"nruns":30
+}

@@ -1,0 +1,9 @@
+{
+	"modeltop": ["ba", "er", "gr","sb"],
+	"modeln": [350],
+	"modelk": [12,18],
+	"h": [2],
+	"extmodel": [],
+	"coincexp": [3],
+	"nruns": 100
+}

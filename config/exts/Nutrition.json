@@ -1,0 +1,9 @@
+{
+	"modeltop": ["ba","er","ws"],
+	"modeln": [683],
+	"modelk": [6.50],
+	"h": [2],
+	"extmodel": ["/scratch/tokuda/20221022-categs/Nutrition_es.tsv"],
+	"coincexp": [1],
+	"nruns":30
+}

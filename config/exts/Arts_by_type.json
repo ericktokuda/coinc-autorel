@@ -1,0 +1,9 @@
+{
+	"modeltop": ["ba","er","ws"],
+	"modeln": [350],
+	"modelk": [4.71],
+	"h": [2],
+	"extmodel": ["/scratch/tokuda/20221022-categs/Arts_by_type_es.tsv"],
+	"coincexp": [1],
+	"nruns":30
+}

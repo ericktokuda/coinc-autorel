@@ -1,0 +1,9 @@
+{
+	"modeltop": ["ba","er","ws"],
+	"modeln": [3518],
+	"modelk": [6.81],
+	"h": [2],
+	"extmodel": ["/scratch/tokuda/20221022-categs/Engineering_disciplines_es.tsv"],
+	"coincexp": [1],
+	"nruns":30
+}

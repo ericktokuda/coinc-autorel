@@ -1,0 +1,9 @@
+{
+	"modeltop": ["ba", "er", "gr","sb"],
+	"modeln": [200,350,500],
+	"modelk": [6],
+	"h": [2],
+	"extmodel": ["/scratch/tokuda/20221223-coinc/wikis/Mathematics/enwiki.wikilink_graph.2015-03-01.graphml"],
+	"coincexp": [3],
+	"nruns": 100
+}

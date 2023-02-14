@@ -1,0 +1,10 @@
+{
+	"modeltop": [],
+	"modeln": [50],
+	"modelk": [6],
+	"h": [2],
+	"extmodel": ["/scratch/tokuda/results/autorelation/20230206-coinc/2014/networks/Theology_es.tsv","/scratch/tokuda/results/autorelation/20230206-coinc/2014/networks/Theology_es.tsv"],
+	"refnodes": ["/scratch/tokuda/Theology_vs.tsv"],
+	"coincexp": [1],
+	"nruns":2
+}

@@ -1,0 +1,9 @@
+{
+	"modeltop": ["er","ba"],
+	"modeln": [300],
+	"modelk": [6],
+	"h": [2],
+	"extmodel": ["/scratch/tokuda/20221022-categs/Theology_es.tsv","/scratch/tokuda/20221022-categs/Economics_es.tsv"],
+	"coincexp": [1],
+	"nruns":5
+}

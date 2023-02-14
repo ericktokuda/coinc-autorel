@@ -1,0 +1,9 @@
+{
+	"modeltop": ["ba","er","ws"],
+	"modeln": [1007],
+	"modelk": [5.17],
+	"h": [2],
+	"extmodel": ["/scratch/tokuda/20221022-categs/Geography_es.tsv"],
+	"coincexp": [1],
+	"nruns":30
+}
