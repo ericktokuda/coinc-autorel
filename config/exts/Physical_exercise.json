@@ -1,9 +1,0 @@
-{
-	"modeltop": ["ba","er","ws"],
-	"modeln": [696],
-	"modelk": [6.30],
-	"h": [2],
-	"extmodel": ["/scratch/tokuda/20221022-categs/Physical_exercise_es.tsv"],
-	"coincexp": [1],
-	"nruns":30
-}

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Extract features from undirected graph
+"""Calculate autorelation given a network (format is the list of vertice (_vs)
+and edges (_es)
 """
 
 import argparse
@@ -448,6 +449,8 @@ def get_feats_from_components(g, mincompsz):
 
 ##########################################################
 def run_experiment(top, nreq, k, h, runid, mincompsz, coincexp, isext, outdir):
+    t = 0.8
+
     random.seed(runid); np.random.seed(runid) # Random seed
 
     if isext:
@@ -459,8 +462,6 @@ def run_experiment(top, nreq, k, h, runid, mincompsz, coincexp, isext, outdir):
     info(expidstr)
     tmpfile = pjoin('/tmp/del.png')
 
-    t = 0.8
-    # mincompsz = 4
 
     visdir = pjoin(outdir, 'vis')
     os.makedirs(visdir, exist_ok=True)
@@ -509,6 +510,7 @@ def run_experiment(top, nreq, k, h, runid, mincompsz, coincexp, isext, outdir):
     ax.plot(xs, ys, color='k')
     outpath = pjoin(visdir, '{}_autorel.png'.format(expidstr))
     plt.savefig(outpath); plt.close()
+    ys1 = ys
 
     coords2 = plot_graph_adj(coinc, None, vlbls, vszs, op['grcoinc'])
     gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
@@ -536,7 +538,6 @@ def run_experiment(top, nreq, k, h, runid, mincompsz, coincexp, isext, outdir):
     vcolours = []
     for i in range(n):
         vcolours.append(lcolours[aux.index(i)])
-
 
     # vcolours = lcolours[aux]
 
@@ -610,9 +611,34 @@ def run_experiment(top, nreq, k, h, runid, mincompsz, coincexp, isext, outdir):
         vcolours.append(lcolours[aux.index(i)])
 
     coords1 = plot_graph4(g, None, vlbls, vszs, vcolours, op['grorig'].replace('.png', '2.png'))
-    ###########################################################
-    
-    return ys
+    return ys1
+
+###########################################################
+def plot_pca(df, tops, exts, nruns, outdir):
+    z = np.diff(df.values, axis=1)
+    a, evecs, evals = transform.pca(z, normalize=True)
+    # pcs, contribs = transform.get_pc_contribution(evecs)
+    coords = np.column_stack([a[:, 0], a[:, 1]]).real
+
+    W = 640; H = 480
+    fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
+
+    for i in range(len(tops)):
+        i0 = i * nruns
+        i1 = (i + 1) * nruns
+        ax.scatter(coords[i0:i1, 0], coords[i0:i1, 1], label=tops[i], c=PALETTE[i])
+
+    i0 = len(tops) * nruns
+    for i, top in enumerate(exts):
+        i1 = i0 + i
+        lbl = os.path.basename(exts[i]).replace('_es.tsv', '')
+        ax.scatter(coords[i1, 0], coords[i1, 1], label=lbl, c=PALETTE[len(tops) + i])
+        i1 += 1
+
+    plt.legend(loc='center left', bbox_to_anchor=(1, .5))
+    plt.tight_layout(rect=[0, 0, 0.95, 1])
+    outpath = pjoin(outdir, 'pca.png')
+    plt.savefig(outpath)
 
 ##########################################################
 def run_experiments(cfg, nprocs, outpath, outdir):
@@ -655,36 +681,8 @@ def main(cfgpath, nprocs, outdir):
     else:
         df = run_experiments(cfg, nprocs, outpath, outdir)
 
-    distcols = df.columns[8:]
-    numds = len(distcols)
-
-    tops = cfg['modeltop']
-    nruns = cfg['nruns']
-    z = np.diff(df[distcols].values, axis=1)
-
-    a, evecs, evals = transform.pca(z, normalize=True)
-    # pcs, contribs = transform.get_pc_contribution(evecs)
-    coords = np.column_stack([a[:, 0], a[:, 1]]).real
-
-    W = 640; H = 480
-    fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
-
-    for i in range(len(tops)):
-        i0 = i * nruns
-        i1 = (i + 1) * nruns
-        ax.scatter(coords[i0:i1, 0], coords[i0:i1, 1], label=tops[i], c=PALETTE[i])
-
-    i0 = len(tops) * nruns
-    for i, top in enumerate(cfg['extmodel']):
-        i1 = i0 + i
-        lbl = os.path.basename(cfg['extmodel'][i]).replace('_es.tsv', '')
-        ax.scatter(coords[i1, 0], coords[i1, 1], label=lbl, c=PALETTE[len(tops) + i])
-        i1 += 1
-
-    plt.legend(loc='center left', bbox_to_anchor=(1, .5))
-    plt.tight_layout(rect=[0, 0, 0.95, 1])
-    outpath = pjoin(outdir, 'pca.png')
-    plt.savefig(outpath)
+    plot_pca(df.iloc[:, 8:], cfg['modeltop'], cfg['extmodel'],
+             cfg['nruns'], outdir)
 
 ##########################################################
 if __name__ == "__main__":

@@ -1,9 +1,0 @@
-{
-	"modeltop": ["ba","er","ws"],
-	"modeln": [837],
-	"modelk": [4.08],
-	"h": [2],
-	"extmodel": ["/scratch/tokuda/20221022-categs/Medical_research_es.tsv"],
-	"coincexp": [1],
-	"nruns":30
-}

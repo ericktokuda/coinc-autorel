@@ -1,9 +1,0 @@
-{
-	"modeltop": ["ba","er","ws"],
-	"modeln": [273],
-	"modelk": [4.62],
-	"h": [2],
-	"extmodel": ["/scratch/tokuda/20221022-categs/Physics_es.tsv"],
-	"coincexp": [1],
-	"nruns":30
-}

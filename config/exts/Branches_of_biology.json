@@ -1,9 +1,0 @@
-{
-	"modeltop": ["ba","er","ws"],
-	"modeln": [3558],
-	"modelk": [9.85],
-	"h": [2],
-	"extmodel": ["/scratch/tokuda/20221022-categs/Branches_of_biology_es.tsv"],
-	"coincexp": [1],
-	"nruns":30
-}

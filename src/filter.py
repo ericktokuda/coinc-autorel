@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
-"""Filter snapshot by a list of ids (e.g. output from categories.py).
-We get just the major component
+"""Filter snapshot by a list of ids. Expected input is in consonni's format.
+Output is the format of the output of categories.py. The input format is just
+the list of edges so we filter the edges. As such, the nodes of the output have
+at least one connection.
+Output a list of vertices and edges because we may have more than one connected
+component.
 """
 
 import argparse
@@ -75,7 +79,7 @@ def main(snappath, idspath, outdir):
     if 'ns' in dfids.columns: # Filter by namespace 0 (pages)
         dfids = dfids.loc[dfids.ns == 0]
 
-    print(dfids.value_counts('hops'))
+    # Filter edges by list of ids
     cls1 = dfsnap.page_id_from.isin(dfids.pageid)
     cls2 = dfsnap.page_id_to.isin(dfids.pageid)
     filt = dfsnap.loc[cls1 & cls2]

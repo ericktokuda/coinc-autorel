@@ -1,0 +1,9 @@
+{
+	"modeltop": ["ba","er","ws"],
+	"modeln": [350],
+	"modelk": [4.71],
+	"h": [2],
+	"extmodel": ["/scratch/tokuda/results/autorelation/20230206-coinc/2018/networks//Arts_by_type_es.tsv"],
+	"coincexp": [1],
+	"nruns":30
+}

@@ -447,7 +447,7 @@ def get_feats_from_components(g, mincompsz):
     return feats
 
 ##########################################################
-def run_experiment(top, dfref, nreq, k, h, runid, mincompsz, coincexp, isext, outdir):
+def run_experiment(top, dfreforig, nreq, k, h, runid, mincompsz, coincexp, isext, outdir):
     random.seed(runid); np.random.seed(runid) # Random seed
 
     if isext:
@@ -469,7 +469,10 @@ def run_experiment(top, dfref, nreq, k, h, runid, mincompsz, coincexp, isext, ou
 
     g, adj = generate_graph(top, nreq, k, outdir)
     n1 = g.vcount()
+    dfref = dfreforig.merge(pd.DataFrame(g.vs['wid'], columns=['wid']), how='inner', on='wid')
+
     n2 = len(dfref)
+
     info('n,k:{},{}'.format(n1, np.mean(g.degree())))
     vszs = np.array(g.degree()) + 1 # In case it is zero
 
@@ -511,6 +514,14 @@ def run_experiment(top, dfref, nreq, k, h, runid, mincompsz, coincexp, isext, ou
     outpath = pjoin(visdir, '{}_autorel.png'.format(expidstr))
     plt.savefig(outpath); plt.close()
 
+    for j in range(means.shape[1] - 1):
+        jj = j + 1
+        dfref['d{:02d}'.format(jj)] = means[:, jj]
+
+    dfref.to_csv(pjoin(outdir, 'means.tsv'), sep='\t', index=False)
+
+##########################################################
+def old():
     coords2 = plot_graph_adj(coinc, None, vlbls, vszs, op['grcoinc'])
     gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
     gcoinc = label_communities(gcoinc, CID, vszs, op['grcoinc'])
@@ -582,7 +593,7 @@ def run_experiment(top, dfref, nreq, k, h, runid, mincompsz, coincexp, isext, ou
     ax.plot(xs, ys, color='k')
     outpath = pjoin(visdir, '{}_autorel2.png'.format(expidstr))
     plt.savefig(outpath); plt.close()
-    
+
     coords2 = plot_graph_adj(coinc, None, vlbls, vszs, op['grcoinc'])
     gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
     gcoinc = label_communities(gcoinc, CID, vszs, op['grcoinc'])
@@ -611,8 +622,6 @@ def run_experiment(top, dfref, nreq, k, h, runid, mincompsz, coincexp, isext, ou
         vcolours.append(lcolours[aux.index(i)])
 
     coords1 = plot_graph4(g, None, vlbls, vszs, vcolours, op['grorig'].replace('.png', '2.png'))
-    ###########################################################
-    
     return ys
 
 ##########################################################
