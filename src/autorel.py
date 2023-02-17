@@ -449,6 +449,7 @@ def get_feats_from_components(g, mincompsz):
 
 ##########################################################
 def run_experiment(top, nreq, k, h, runid, mincompsz, coincexp, isext, outdir):
+    """Execute a single run"""
     t = 0.8
 
     random.seed(runid); np.random.seed(runid) # Random seed
@@ -642,6 +643,9 @@ def plot_pca(df, tops, exts, nruns, outdir):
 
 ##########################################################
 def run_experiments(cfg, nprocs, outpath, outdir):
+    """Spawl jobs"""
+    if os.path.isfile(outpath): return pd.read_csv(outpath)
+
     tops = cfg['modeltop']
     ns = cfg['modeln']
     ks = cfg['modelk']
@@ -650,6 +654,7 @@ def run_experiments(cfg, nprocs, outpath, outdir):
     exts = cfg['extmodel']
     mincompsz = 4
     runids = range(cfg['nruns'])
+
     argsconcat = list(product(tops, ns, ks,  hs, runids, [mincompsz], coincexp, [False], [outdir]))
     args_ = product(exts, [-1], [-1],  hs, [0], [mincompsz], coincexp, [True], [outdir])
     argsconcat.extend(list(args_))
@@ -664,9 +669,6 @@ def run_experiments(cfg, nprocs, outpath, outdir):
     cols = cols1 + cols2
     df = pd.DataFrame(featsall.tolist(), columns=cols)
     df.to_csv(outpath, index=False, float_format='%.3f')
-
-    # df = pd.DataFrame(featsall).fillna(0)
-    # df.to_csv(outpath, index=False, float_format='%.3f', header=False)
     return df
 
 ##########################################################
@@ -674,12 +676,9 @@ def main(cfgpath, nprocs, outdir):
     info(inspect.stack()[0][3] + '()')
 
     cfg = json.load(open(cfgpath))
-
     outpath = pjoin(outdir, 'res.csv')
-    if os.path.isfile(outpath):
-        df = pd.read_csv(outpath)
-    else:
-        df = run_experiments(cfg, nprocs, outpath, outdir)
+
+    df = run_experiments(cfg, nprocs, outpath, outdir)
 
     plot_pca(df.iloc[:, 8:], cfg['modeltop'], cfg['extmodel'],
              cfg['nruns'], outdir)
