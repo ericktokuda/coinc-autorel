@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract features from undirected graph
+"""Calculate Luc's cross-relation of all graphs that are simultaneously inside a set of folders
 """
 
 import argparse
@@ -27,9 +27,6 @@ from utils import create_graph_from_dataframes
 CID = 'compid'
 PALETTE = ['#4daf4a', '#e41a1c', '#ff7f00', '#984ea3', '#ffff33', '#a65628', '#377eb8']
 
-# import warnings
-# warnings.filterwarnings("error")
-
 ##########################################################
 def interiority(dataorig):
     """Calculate the interiority index of the two rows. @vs has 2rows and n-columns, where
@@ -39,7 +36,6 @@ def interiority(dataorig):
     abssum = np.sum(data, axis=1)
     den = np.min(abssum)
     num = np.sum(np.min(data, axis=0))
-    # if den == 0:breakpoint()
     return num / den
 
 ##########################################################
@@ -207,6 +203,40 @@ def get_common_vs(dfvs, id='wid'):
     return dfvs[0].loc[dfvs[0].wid.isin(common.wid)]
 
 ##########################################################
+def plot_abs_diff(feat1, feat2, lbl, outdir):
+    diffs = np.abs(feat1 - feat2)
+    plotpath = pjoin(outdir, '{}_diff.png'.format(lbl))
+    plot_curves_and_avg(diffs, '', plotpath)
+    return diffs
+
+##########################################################
+def plot_diff_sums_hist(diffs, lbl, outdir):
+    sums = np.sum(diffs, axis=1)
+    plotpath = pjoin(outdir, '{}_diffsum.png'.format(lbl))
+    W = 640; H = 480
+    fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
+    ax.hist(sums, bins=50)
+    ax.set_xlabel('Sum of crossrelation across the neighbours of each node')
+    plt.savefig(plotpath); plt.close()
+    return sums
+
+##########################################################
+def plot_graph(g, dfref, diffsums, lbl, outdir):
+    vattrs = np.ones(g.vcount())
+    for i, wid in enumerate(dfref.wid):
+        idx = g.vs.select(wid=wid).indices[0]
+        vattrs[idx] = diffsums[i]
+
+    # vszs = np.array(g.vs['sz']) * 10
+    vszs = np.array(vattrs) * 10
+    min0, max0 = np.min(vszs), np.max(vszs)
+    vszs = (vszs - min0) / (max0 - min0)
+    vszs = vszs * 10 + 5
+    vcols = 'blue'
+    plotpath = pjoin(outdir, '{}_netw.png'.format(lbl))
+    igraph.plot(g, plotpath, vertex_size=vszs, vertex_color=vcols)
+
+##########################################################
 def run_group(f, netdirs, labels, coincexp, nprocs, outdir):
     info(inspect.stack()[0][3] + '()')
 
@@ -225,21 +255,15 @@ def run_group(f, netdirs, labels, coincexp, nprocs, outdir):
         argsconcat.append([g, lbl, dfref, coincexp, outdir])
 
     featsall = parallelize(run_experiment, nprocs, argsconcat)
+    diffs = plot_abs_diff(featsall[0][0], featsall[1][0], lbl, outdir)
+    diffsums = plot_diff_sums_hist(diffs, lbl, outdir)
+    plot_graph(gs[0], dfref, diffsums, lbl, outdir)
 
 ##########################################################
-def run_experiment(g, lbl, dfref, coincexp, outdir):
-    t = 0.8
-    info(lbl)
-
-    adj = g.get_adjacency_sparse()
-    vfeats, featlbls = extract_features(adj, g)
-    coinc = get_coincidx_values(vfeats, .5, coincexp, False)
-    nref = len(dfref)
-
-    # maxdist = g.diameter() + 1
-    maxdist = 15
-
+def calculate_crossrelation(dfref, g, coinc, maxdist):
+    """Calculate autorelation of the vertices @dfref in @g"""
     # For each vx, calculate autorelation across neighbours
+    nref = len(dfref)
     means = np.zeros((nref, maxdist), dtype=float)
     stds = np.zeros((nref, maxdist), dtype=float)
     for i, wid in enumerate(dfref.wid):
@@ -251,19 +275,42 @@ def run_experiment(g, lbl, dfref, coincexp, outdir):
             if len(neighs) == 0: continue
             aux = coinc[v, neighs]
             means[i, l], stds[i, l]  = np.mean(aux), np.std(aux)
+    return means, stds
 
-    # Plot the autorelation curves (one for each vertex)
+##########################################################
+def plot_crossrelation(means, stds, lbl, outdir):
+    plotpath = pjoin(outdir, '{}_crossrel.png'.format(lbl))
+    plot_curves_and_avg(means, '', plotpath)
+
+##########################################################
+def plot_curves_and_avg(curves, ylbl, plotpath):
+    """Plot the autorelation curves (one for each vertex)"""
     W = 640; H = 480
     fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
-    xs = range(1, maxdist)
-    for v in range(nref):
-        ys = means[v, 1:]
+    maxx = curves.shape[1]
+    xs = range(1, maxx + 1)
+    for v in range(len(curves)):
+        ys = curves[v, :]
         ax.plot(xs, ys)
-    ys = np.mean(means[:, 1:], axis=0) # Average of the means
+    ys = np.mean(curves, axis=0) # Average of the means
     ax.plot(xs, ys, color='k')
     ax.set_ylim(0, 1)
-    outpath = pjoin(outdir, '{}_autorel.png'.format(lbl))
-    plt.savefig(outpath); plt.close()
+    ax.set_xlabel('Shift')
+    ax.set_ylabel(ylbl)
+    plt.savefig(plotpath); plt.close()
+
+##########################################################
+def run_experiment(g, lbl, dfref, coincexp, outdir):
+    t = 0.8
+    maxdist = 15 # maxdist = g.diameter() + 1
+    info(lbl)
+
+    adj = g.get_adjacency_sparse()
+    vfeats, featlbls = extract_features(adj, g)
+    coinc = get_coincidx_values(vfeats, .5, coincexp, False)
+    means, stds = calculate_crossrelation(dfref, g, coinc, maxdist)
+    plot_crossrelation(means[:, 1:], stds[:, 1:], lbl, outdir)
+    return [means, stds]
 
 ##########################################################
 def find_common_files(dirs, ext='.tsv'):
