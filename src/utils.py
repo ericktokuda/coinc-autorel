@@ -14,6 +14,7 @@ import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from myutils import info, create_readme
 import pandas as pd
+import igraph
 
 ##########################################################
 def get_common_ids(nodespath1, nodespath2, outdir):
@@ -27,6 +28,28 @@ def get_common_ids(nodespath1, nodespath2, outdir):
     df3 = df1.merge(df2, how='inner', on='wid')
     df3['title'] = df3.title_x
     df3.to_csv(outpath, index=False, sep='\t', columns=['wid', 'title'])
+
+##########################################################
+def create_graph_from_dataframes(dfes, dfvs, sep='\t', directed=False):
+    """Generate a graph from the provided list of nodes and edges.
+    The list of nodes contain the attributes of the nodes and the total number.
+    The list of edges consider contains two fields (src and tgt) which are associated to the indices
+    of the list of nodes."""
+    if type(dfes) == str or type(dfvs) == str:
+        dfes = pd.read_csv(dfes, sep=sep)
+        dfvs = pd.read_csv(dfvs, sep=sep)
+
+    n = len(dfvs)
+    g = igraph.Graph(n)
+    for attr in dfvs.columns:
+        g.vs[attr] = dfvs[attr]
+    g.add_edges(dfes.values)
+
+    if directed: g.to_directed()
+    else: g.to_undirected()
+
+    g.simplify()
+    return g
 
 ##########################################################
 def main(nodespath1, nodespath2, outdir):

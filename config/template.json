@@ -1,9 +1,0 @@
-{
-	"modeltop": ["ba","er","ws"],
-	"modeln": [NNN],
-	"modelk": [KKK],
-	"h": [2],
-	"extmodel": ["/scratch/tokuda/20221022-categs/TTT_es.tsv"],
-	"coincexp": [1],
-	"nruns":30
-}
