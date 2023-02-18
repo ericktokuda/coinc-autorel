@@ -351,7 +351,7 @@ def run_experiment(top, n, k, runid, coincexp, outdir):
 
     gid = os.path.basename(top).replace('_es.tsv', '') if isext else top
 
-    expidstr = '{}_{:03d}'.format(gid, runid)
+    expidstr = '{}_{:02d}'.format(gid, runid)
     info(expidstr)
     tmpfile = pjoin('/tmp/del.png')
 
@@ -363,7 +363,7 @@ def run_experiment(top, n, k, runid, coincexp, outdir):
 
     g, adj = generate_graph(top, n, k)
     n = g.vcount()
-    info('n,k:{},{:.02f}'.format(n, np.mean(g.degree())))
+    # info('n,k:{},{:.02f}'.format(n, np.mean(g.degree())))
 
     vfeats, featlbls = extract_features(adj, g)
     coinc0 = get_coincidx_values(vfeats, .5, coincexp, False)
@@ -381,8 +381,8 @@ def run_experiment(top, n, k, runid, coincexp, outdir):
     return np.mean(means, axis=0)
 
 ###########################################################
-def plot_pca(df, tops, exts, nruns, outdir):
-    z = np.diff(df.values, axis=1)
+def plot_pca(data, models, refmodel, nruns, outdir):
+    z = np.diff(data, axis=1)
     a, evecs, evals = transform.pca(z, normalize=True)
     # pcs, contribs = transform.get_pc_contribution(evecs)
     coords = np.column_stack([a[:, 0], a[:, 1]]).real
@@ -390,22 +390,21 @@ def plot_pca(df, tops, exts, nruns, outdir):
     W = 640; H = 480
     fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
 
-    for i in range(len(tops)):
-        i0 = i * nruns
-        i1 = (i + 1) * nruns
-        ax.scatter(coords[i0:i1, 0], coords[i0:i1, 1], label=tops[i], c=PALETTE[i])
+    lbl = os.path.basename(refmodel).replace('_es.tsv', '')
+    ax.scatter(coords[0, 0], coords[0, 1], label=lbl,
+               c=PALETTE[0])
 
-    i0 = len(tops) * nruns
-    for i, top in enumerate(exts):
-        i1 = i0 + i
-        lbl = os.path.basename(exts[i]).replace('_es.tsv', '')
-        ax.scatter(coords[i1, 0], coords[i1, 1], label=lbl, c=PALETTE[len(tops) + i])
-        i1 += 1
+    coords = coords[1:, :]
+    for topid in range(len(models)):
+        i0 = topid * nruns
+        i1 = (topid + 1) * nruns
+        ax.scatter(coords[i0:i1, 0], coords[i0:i1, 1],
+                   label=models[topid], c=PALETTE[topid+1])
 
     plt.legend(loc='center left', bbox_to_anchor=(1, .5))
     plt.tight_layout(rect=[0, 0, 0.95, 1])
     outpath = pjoin(outdir, 'pca.png')
-    plt.savefig(outpath)
+    plt.savefig(outpath); plt.close()
 
 ##########################################################
 def export_params(tops, n, k, espath, coincexp, nruns, outdir):
@@ -435,23 +434,17 @@ def run_group(espath, tops, nruns, coincexp, nprocs, outdir):
     argsconcat = args1 + args2
 
     avgs = parallelize(run_experiment, nprocs, argsconcat)
-    breakpoint()
-    
+    avgs = np.array(avgs)
 
-    featsall = np.array(featsall, dtype=object)
-    nshifts = featsall.shape[1]
-    featsall = np.column_stack((params, featsall))
+    # Export averages (black curves)
+    nn, mm = avgs.shape
+    dfres = pd.DataFrame([[x[0], x[3]] for x in argsconcat],
+                         columns=['model', 'runid'])
+    for j in range(mm):
+        dfres['d{:02d}'] = avgs[:, j]
+    dfres.to_csv(outpath, index=False, float_format='%.3f')
 
-    cols1 = ['model', 'nreq', 'k', 'h', 'runid', 'coincexp', 'isext', 'nreal']
-    cols2 = ['d{:02d}'.format(d) for d in range(1, nshifts + 1)]
-
-    cols = cols1 + cols2
-    df = pd.DataFrame(featsall.tolist(), columns=cols)
-    df.to_csv(outpath, index=False, float_format='%.3f')
-
-    plot_pca(df.iloc[:, -nlags:], cfg['modeltop'], cfg['extmodel'],
-             cfg['nruns'], outdir)
-    return df, nshifts
+    plot_pca(avgs, tops, espath, nruns, outdir)
 
 ##########################################################
 def main(cfgpath, nruns, nprocs, outrootdir):
