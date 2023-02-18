@@ -375,9 +375,9 @@ def run_experiment(top, n, k, runid, coincexp, outdir):
     gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
     coords1 = plot_graph(gcoinc, None, None, None, None, netcoinc)
 
-    vcolours = plot_dendrogram(means, nclusters, expidstr, visdir)
+    colleav = plot_dendrogram(means, nclusters, expidstr, visdir)
 
-    coords1 = plot_graph(g, None, None, None, vcolours, netorig)
+    coords1 = plot_graph(g, None, None, None, colleav, netorig)
     return np.mean(means, axis=0)
 
 ###########################################################
