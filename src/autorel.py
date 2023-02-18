@@ -252,99 +252,17 @@ def get_rgg_params(nvertices, avgdegree):
     return r
 
 ##########################################################
-def plot_graph(g, coordsin, labels, vsizes, outpath):
+def plot_graph(g, coordsin, labels, vsizes, vcolours, outpath):
     coords = np.array(g.layout(layout='fr')) if coordsin is None else coordsin
     visual_style = {}
     visual_style["layout"] = coords
     visual_style["bbox"] = (960, 960)
     visual_style["margin"] = 10
     visual_style['vertex_label'] = labels
-    visual_style['vertex_color'] = 'blue'
-    visual_style['vertex_size'] = vsizes
-    visual_style['vertex_frame_width'] = 0
-    igraph.plot(g, outpath, **visual_style)
-    return coords
-
-##########################################################
-def plot_graph3(g, coordsin, labels, vsizes, grps, outpath):
-    coords = np.array(g.layout(layout='fr')) if coordsin is None else coordsin
-    visual_style = {}
-    visual_style["layout"] = coords
-    visual_style["bbox"] = (960, 960)
-    visual_style["margin"] = 10
-    visual_style['vertex_label'] = labels
-
-    # colors = [ '#1b9e77','#d95f02', '#7570b3', '#e7298a']
-    colors = PALETTE
-    clrs = []
-    for i, grp in enumerate(grps):
-        clrs.append(colors[grp])
-
-    visual_style['vertex_color'] = clrs
-    visual_style['vertex_size'] = 10
-    visual_style['vertex_frame_width'] = 0
-    igraph.plot(g, outpath, **visual_style)
-    return coords
-
-##########################################################
-def plot_graph4(g, coordsin, labels, vsizes, vcolours, outpath):
-    coords = np.array(g.layout(layout='fr')) if coordsin is None else coordsin
-    visual_style = {}
-    visual_style["layout"] = coords
-    visual_style["bbox"] = (960, 960)
-    visual_style["margin"] = 10
-    visual_style['vertex_label'] = labels
-
-    # colors = [ '#1b9e77','#d95f02', '#7570b3', '#e7298a']
-    # colors = PALETTE
-    # clrs = []
-    # for i, grp in enumerate(grps):
-        # clrs.append(colors[grp])
-
     visual_style['vertex_color'] = vcolours
     visual_style['vertex_size'] = 10
     visual_style['vertex_frame_width'] = 0
     igraph.plot(g, outpath, **visual_style)
-    return coords
-
-##########################################################
-def plot_graph2(g, coordsin, labels, vsizes, mincompsz, outpath):
-    coords = np.array(g.layout(layout='fr')) if coordsin is None else coordsin
-
-    membs = np.array(g.vs[CID])
-    comps, compszs = np.unique(membs, return_counts=True)
-    vcolours = np.array(['#D9D9D9FF'] * g.vcount())
-    usedvs = np.where(np.isin(membs, np.where(compszs > mincompsz)[0]))
-    vcolours[usedvs] = '#FF0000FF'
-
-    labels = np.array([''] * g.vcount(), dtype=object)
-    ##########################################################
-    for compid in comps:
-        vs = g.vs.select(compid_eq=compid)
-        if len(vs) <= mincompsz: continue
-        sz = len(vs)
-        degs = vs.degree()
-        labels[vs.indices[0]] = '{:.02f}'.format(np.mean(degs))
-    ##########################################################
-
-    visual_style = {}
-    visual_style["layout"] = coords
-    visual_style["bbox"] = (1960, 1960)
-    visual_style["margin"] = 10
-    visual_style['vertex_label'] = labels
-    # visual_style['vertex_color'] = 'blue'
-    visual_style['vertex_color'] = vcolours
-    visual_style['vertex_size'] = vsizes
-    visual_style['vertex_frame_width'] = 0
-    igraph.plot(g, outpath, **visual_style)
-    igraph.plot(g, outpath.replace('.png', '.pdf'), **visual_style)
-    return coords
-
-##########################################################
-def plot_graph_adj(adj, coords, labels, vsizes, outpath):
-    g = igraph.Graph.Weighted_Adjacency(adj, mode='undirected', attr='weight',
-                                        loops=False)
-    coords = plot_graph(g, coords, labels, vsizes, outpath)
     return coords
 
 ##########################################################
@@ -352,58 +270,6 @@ def threshold_values(coinc, thresh, newval=0):
     """Values less than or equal to @thresh are set to zero"""
     coinc[coinc <= thresh] = newval
     return coinc
-
-##########################################################
-def label_communities(g, attrib, vszs, plotpath):
-    vclust = g.components(mode='weak')
-    ncomms = vclust.__len__()
-    g.vs[CID] = vclust.membership
-
-    membstr = [str(x) for x in g.vs[CID]]
-    _ = plot_graph(g, None, None, vszs, plotpath)
-    # info(vclust.summary())
-    return g
-
-##########################################################
-def get_num_adjacent_groups(g, compid):
-    membs = g.vs[CID]
-    unvisited = set(np.where(np.array(membs) == compid)[0])
-    n = len(unvisited)
-    visited = set() # Visited but not explored
-    explored = set()
-
-    v = unvisited.pop(); visited.add(v)
-    adjgrps = []
-    group = []
-
-    for i in range(1000000):
-        if len(explored) == n: # All vertices from compid was explored
-            adjgrps.append(group)
-            return n, adjgrps
-        elif len(visited) == 0: # No more vertices to explore in this group
-            adjgrps.append(group)
-            group = []
-            v = unvisited.pop(); visited.add(v)
-        else:
-            v = visited.pop()
-            neighs = set(g.neighborhood(v))
-            neighs = neighs.intersection(unvisited)
-            unvisited = unvisited.difference(neighs)
-            visited = visited.union(neighs)
-            explored.add(v)
-            group.append(v)
-    raise Exception('Something wrong')
-
-##########################################################
-def get_num_adjacent_groups_all(g):
-    membership = g.vs[CID]
-    nmembs = len(np.unique(membership))
-
-    nadjgrps = np.zeros((nmembs, 2), dtype=int)
-    for compid in range(nmembs):
-        compsz, adjgrps = get_num_adjacent_groups(g, compid)
-        nadjgrps[compid] = [compsz, len(adjgrps)]
-    return nadjgrps
 
 ##########################################################
 def calculate_autorelation(g, coinc, maxdist):
@@ -439,10 +305,46 @@ def plot_curves_and_avg(curves, ylbl, plotpath):
     plt.savefig(plotpath); plt.close()
 
 ##########################################################
+def plot_dendrogram(means, nclusters, expidstr, outdir):
+    z = hierarchy.ward(means)
+    grps = hierarchy.cut_tree(z, n_clusters=nclusters).flatten() # Not used
+    uids, counts = np.unique(grps, return_counts=True)
+    sortedid = np.argsort(counts)
+    palette = np.array(PALETTE)[sortedid[::-1]]
+
+    colleav = [palette[grp] for grp in grps]
+    nlinks = len(z)
+    collnks = {}
+
+    for i in range(nlinks):
+        clid1, clid2 = np.array(z[i, :2]).astype(int)
+        if clid1 <= nlinks:
+            c1 = colleav[clid1]
+        c1 = colleav[clid1] if clid1 <= nlinks else collnks[clid1]
+        c2 = colleav[clid2] if clid2 <= nlinks else collnks[clid2]
+        collnks[nlinks+i+1] = c1 if c1 == c2 else 'blue'
+
+    def colfunc(id): return collnks[id]
+
+    W = 640; H = 480
+    fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
+    dendr = hierarchy.dendrogram(z, link_color_func=colfunc, ax=ax)
+    aux = dendr['leaves']
+    lcolours = np.array(dendr['leaves_color_list'])
+    plt.savefig(pjoin(outdir, '{}_dendr.png'.format(expidstr)))
+
+    vcolours = []
+    for i in range(len(means)):
+        vcolours.append(lcolours[aux.index(i)])
+
+    return vcolours
+
+##########################################################
 def run_experiment(top, n, k, runid, coincexp, outdir):
     """Single run"""
     t = 0.8
     maxdist = 15 # maxdist = g.diameter() + 1
+    nclusters = 4  # Hierarchical clustering
 
     isext = top.endswith('.tsv')
     random.seed(runid); np.random.seed(runid) # Random seed
@@ -461,7 +363,7 @@ def run_experiment(top, n, k, runid, coincexp, outdir):
 
     g, adj = generate_graph(top, n, k)
     n = g.vcount()
-    info('n,k:{},{}'.format(n, np.mean(g.degree())))
+    info('n,k:{},{:.02f}'.format(n, np.mean(g.degree())))
 
     vfeats, featlbls = extract_features(adj, g)
     coinc0 = get_coincidx_values(vfeats, .5, coincexp, False)
@@ -470,109 +372,13 @@ def run_experiment(top, n, k, runid, coincexp, outdir):
     plotpath = pjoin(visdir, '{}_autorel.png'.format(expidstr))
     plot_curves_and_avg(means, '', plotpath)
 
-    ys = np.mean(means, axis=0)
-
-    # coords2 = plot_graph_adj(coinc, None, vlbls, vszs, op['grcoinc'])
-    # gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
-    # gcoinc = label_communities(gcoinc, CID, vszs, op['grcoinc'])
-    # _ = plot_graph2(gcoinc, None, None, vszs, mincompsz, op['grcoinc']) # Overwrite
-
-    # g.vs[CID] = gcoinc.vs[CID]
-    # membstr = [str(x) for x in g.vs[CID]]
-
-    nclusters = 4
-    z = hierarchy.ward(means)
-    grps = hierarchy.cut_tree(z, n_clusters=nclusters).flatten()
-
-    scipy.cluster.hierarchy.set_link_color_palette(PALETTE)
-    W = 640; H = 480
-    fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
-    dendr = hierarchy.dendrogram(z, color_threshold=3, ax=ax)
-    aux = dendr['leaves']
-
-    lcolours = np.array(dendr['leaves_color_list'])
-
-    plt.savefig(pjoin(visdir, '{}_dendr.png'.format(expidstr)))
-    breakpoint()
-    
-
-    vcolours = []
-    for i in range(n):
-        vcolours.append(lcolours[aux.index(i)])
-
-    # vcolours = lcolours[aux]
-
-    coords1 = plot_graph4(g, None, vlbls, vszs, vcolours, op['grorig'])
-
-    ###########################################################
-    cols, colcounts =  np.unique(lcolours, return_counts=True)
-
-    x = np.where(np.array(vcolours) == cols[0])[0]
-    gind = g.induced_subgraph(x)
-
-    g = gind.copy()
-    n = g.vcount()
-
-    maxdist = 15
-
-    # For each vx, calculate autorelation across neighbours
-    means = np.zeros((n, maxdist), dtype=float)
-    stds = np.zeros((n, maxdist), dtype=float)
-    for v in range(n):
-        dists = np.array(g.distances(source=v, mode='all')[0])
-        dists[v] = 9999999 # By default, in a simple graph, a node is not a neighbour of itself
-        for l in range(1, maxdist):
-            neighs = np.where(dists == l)[0]
-            if len(neighs) == 0: continue
-            aux = coinc[v, neighs]
-            means[v, l], stds[v, l]  = np.mean(aux), np.std(aux)
-
-    # maxdist = g.diameter() + 1
-
-    # Use autorelation for neighsize={0:maxdist} as features
-    coinc = threshold_values(coinc, t)
-
-    # Plot the autorelation curves (one for each vertex)
-    W = 640; H = 480
-    fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
-    xs = range(1, maxdist)
-    for v in range(n):
-        ys = means[v, 1:]
-        ax.plot(xs, ys)
-    ys = np.mean(means[:, 1:], axis=0) # Average of the means
-    ax.plot(xs, ys, color='k')
-    outpath = pjoin(visdir, '{}_autorel2.png'.format(expidstr))
-    plt.savefig(outpath); plt.close()
-    
-    coords2 = plot_graph_adj(coinc, None, vlbls, vszs, op['grcoinc'])
     gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
-    gcoinc = label_communities(gcoinc, CID, vszs, op['grcoinc'])
-    # _ = plot_graph2(gcoinc, None, None, vszs, mincompsz, op['grcoinc']) # Overwrite
+    coords1 = plot_graph(gcoinc, None, None, None, None, netcoinc)
 
-    g.vs[CID] = gcoinc.vs[CID]
-    membstr = [str(x) for x in g.vs[CID]]
+    vcolours = plot_dendrogram(means, nclusters, expidstr, visdir)
 
-    # _ = plot_graph(g, coords1, vlbls, vszs, tmpfile)
-    nclusters = 4
-    z = hierarchy.ward(means[:, 1:])
-    grps = hierarchy.cut_tree(z, n_clusters=nclusters).flatten()
-
-    scipy.cluster.hierarchy.set_link_color_palette(PALETTE)
-    W = 640; H = 480
-    fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
-    dendr = hierarchy.dendrogram(z, color_threshold=1.0, ax=ax)
-    aux = dendr['leaves']
-
-    lcolours = np.array(dendr['leaves_color_list'])
-
-    plt.savefig(pjoin(visdir, '{}_dendr2.png'.format(expidstr)))
-
-    vcolours = []
-    for i in range(n):
-        vcolours.append(lcolours[aux.index(i)])
-
-    coords1 = plot_graph4(g, None, vlbls, vszs, vcolours, op['grorig'].replace('.png', '2.png'))
-    return ys1
+    coords1 = plot_graph(g, None, None, None, vcolours, netorig)
+    return np.mean(means, axis=0)
 
 ###########################################################
 def plot_pca(df, tops, exts, nruns, outdir):
@@ -619,19 +425,18 @@ def run_group(espath, tops, nruns, coincexp, nprocs, outdir):
     # Get the n,m,k from the reference network
     g, adj = generate_graph(espath, 0, 0) # connected and undirected
     n, m = [g.vcount()], [g.ecount()]
-    k = [n[0] / m[0] * 2]
+    k = [m[0] / n[0] * 2]
 
-    export_params(tops, n, k, espath, coincexp, nruns, outdir)
+    export_params(tops, n[0], k[0], espath, coincexp, nruns, outdir)
 
     runids = range(nruns)
     args1 = [[espath, 0, 0, 0, coincexp, outdir]]
-    args2 = list(product(tops, n, k, runids, [coincexp], outdir))
+    args2 = list(product(tops, n, k, runids, [coincexp], [outdir]))
     argsconcat = args1 + args2
-    # args_ = product(exts, [-1], [-1],  [0], [mincompsz], coincexp, [True], [outdir])
-    # argsconcat.extend(list(args_))
-    # params = np.array([x[:-1] for x in argsconcat], dtype=object)
 
-    featsall = parallelize(run_experiment, nprocs, argsconcat)
+    avgs = parallelize(run_experiment, nprocs, argsconcat)
+    breakpoint()
+    
 
     featsall = np.array(featsall, dtype=object)
     nshifts = featsall.shape[1]
@@ -643,9 +448,10 @@ def run_group(espath, tops, nruns, coincexp, nprocs, outdir):
     cols = cols1 + cols2
     df = pd.DataFrame(featsall.tolist(), columns=cols)
     df.to_csv(outpath, index=False, float_format='%.3f')
+
+    plot_pca(df.iloc[:, -nlags:], cfg['modeltop'], cfg['extmodel'],
+             cfg['nruns'], outdir)
     return df, nshifts
-    # plot_pca(df.iloc[:, -nlags:], cfg['modeltop'], cfg['extmodel'],
-             # cfg['nruns'], outdir)
 
 ##########################################################
 def main(cfgpath, nruns, nprocs, outrootdir):
