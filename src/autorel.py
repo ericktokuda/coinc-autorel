@@ -441,7 +441,8 @@ def run_group(espath, tops, nruns, coincexp, nprocs, outdir):
     dfres = pd.DataFrame([[x[0], x[3]] for x in argsconcat],
                          columns=['model', 'runid'])
     for j in range(mm):
-        dfres['d{:02d}'] = avgs[:, j]
+        dfres['d{:02d}'.format(j)] = avgs[:, j]
+
     dfres.to_csv(outpath, index=False, float_format='%.3f')
 
     plot_pca(avgs, tops, espath, nruns, outdir)
