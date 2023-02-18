@@ -1,9 +1,0 @@
-{
-	"modeltop": ["ba","er","ws"],
-	"modeln": [4035],
-	"modelk": [14.85],
-	"h": [2],
-	"extmodel": ["/scratch/tokuda/results/autorelation/20230206-coinc/2014/networks//Chemistry_es.tsv"],
-	"coincexp": [1],
-	"nruns":30
-}

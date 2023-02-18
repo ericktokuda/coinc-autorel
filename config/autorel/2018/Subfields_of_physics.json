@@ -1,9 +1,0 @@
-{
-	"modeltop": ["ba","er","ws"],
-	"modeln": [2059],
-	"modelk": [11.27],
-	"h": [2],
-	"extmodel": ["/scratch/tokuda/results/autorelation/20230206-coinc/2018/networks//Subfields_of_physics_es.tsv"],
-	"coincexp": [1],
-	"nruns":30
-}

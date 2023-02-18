@@ -1,9 +1,0 @@
-{
-	"modeltop": ["ba","er","ws"],
-	"modeln": [2051],
-	"modelk": [8.65],
-	"h": [2],
-	"extmodel": ["/scratch/tokuda/results/autorelation/20230206-coinc/2014/networks//Fields_of_mathematics_es.tsv"],
-	"coincexp": [1],
-	"nruns":30
-}

@@ -1,9 +1,0 @@
-{
-	"modeltop": ["ba","er","ws"],
-	"modeln": [1971],
-	"modelk": [7.13],
-	"h": [2],
-	"extmodel": ["/scratch/tokuda/results/autorelation/20230206-coinc/2014/networks//Social_sciences_es.tsv"],
-	"coincexp": [1],
-	"nruns":30
-}

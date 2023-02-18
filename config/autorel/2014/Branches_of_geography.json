@@ -1,9 +1,0 @@
-{
-	"modeltop": ["ba","er","ws"],
-	"modeln": [279],
-	"modelk": [4.38],
-	"h": [2],
-	"extmodel": ["/scratch/tokuda/results/autorelation/20230206-coinc/2014/networks//Branches_of_geography_es.tsv"],
-	"coincexp": [1],
-	"nruns":30
-}

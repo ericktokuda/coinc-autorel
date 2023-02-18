@@ -1,9 +1,0 @@
-{
-	"modeltop": ["ba","er","ws"],
-	"modeln": [1007],
-	"modelk": [5.17],
-	"h": [2],
-	"extmodel": ["/scratch/tokuda/results/autorelation/20230206-coinc/2014/networks//Geography_es.tsv"],
-	"coincexp": [1],
-	"nruns":30
-}

@@ -1,9 +1,0 @@
-{
-	"modeltop": ["ba","er","ws"],
-	"modeln": [2186],
-	"modelk": [7.66],
-	"h": [2],
-	"extmodel": ["/scratch/tokuda/results/autorelation/20230206-coinc/2014/networks//Biotechnology_es.tsv"],
-	"coincexp": [1],
-	"nruns":30
-}

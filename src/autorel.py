@@ -25,7 +25,6 @@ import shutil
 from sklearn.cluster import AgglomerativeClustering
 from scipy.cluster import hierarchy
 
-CID = 'compid'
 PALETTE = ['#4daf4a', '#e41a1c', '#ff7f00', '#984ea3', '#ffff33', '#a65628', '#377eb8']
 
 ##########################################################
@@ -157,7 +156,7 @@ def extract_hierarchical_feats_all(adj,  h):
     return feats, labels
 
 ##########################################################
-def extract_simple_feats_all(adj, g, h):
+def extract_simple_feats_all(adj, g):
     # info(inspect.stack()[0][3] + '()')
     labels = 'dg cl'.split(' ')
     feats = []
@@ -179,8 +178,8 @@ def vattributes2edges(g, attribs, aggreg='sum'):
     return g
 
 ##########################################################
-def generate_graph(model, n, k, outdir):
-    """Generate an undirected graph according to @modelstr. It should be MODEL,N,PARAM"""
+def generate_graph(model, n, k):
+    """Generate an undirected connected graph according to @modelstr. It should be MODEL,N,PARAM"""
     # info(inspect.stack()[0][3] + '()')
 
     if model == 'er':
@@ -228,14 +227,12 @@ def generate_graph(model, n, k, outdir):
     g = g.connected_components().giant()
     g.simplify()
 
-    # gpath = pjoin(outdir, 'graph.png')
     coords = g.layout(layout='fr')
     return g, g.get_adjacency_sparse()
 
 ##########################################################
-def extract_features(adj, g, h):
-    # vfeats, labels = extract_hierarchical_feats_all(adj,  h)
-    vfeats, labels = extract_simple_feats_all(adj,  g, h)
+def extract_features(adj, g):
+    vfeats, labels = extract_simple_feats_all(adj,  g)
     return np.array(vfeats), labels
 
 #############################################################
@@ -409,121 +406,82 @@ def get_num_adjacent_groups_all(g):
     return nadjgrps
 
 ##########################################################
-def get_feats_from_components(g, mincompsz):
-    FEATLEN = 14
-    membs = np.array(g.vs[CID])
-    comps, compszs = np.unique(membs, return_counts=True)
-    ncomps = len(comps)
-    feats = []
-
-    aux = []
-    for compid in comps:
-        vs = g.vs.select(compid_eq=compid)
-        sz = len(vs)
-        if sz <= mincompsz: continue
-        degs = vs.degree()
-
-        gcomp = g.induced_subgraph(vs)
-
-        dists = np.array(gcomp.distances())
-        mpl = np.sum(dists) / (sz * sz - sz)
-
-        clucoeff = gcomp.transitivity_avglocal_undirected()
-        aux.append([sz, np.mean(degs), np.std(degs), mpl, clucoeff])
-
-    if len(aux) == 0: return np.array([0] * FEATLEN)
-
-    aux = np.array(aux)
-    ws = aux[:, 0] / np.sum(aux[:, 0])
-    aux2 = aux[:, 1] * ws
-    data = np.column_stack((aux, aux2))
-
-    means = data.mean(axis=0)
-    stds = data.std(axis=0)
-
-    feats = [len(data), np.max(data[:, 0])]
-    for i in range(data.shape[1]):
-        feats.extend([means[i], stds[i]])
-
-    return feats
-
-##########################################################
-def run_experiment(top, nreq, k, h, runid, mincompsz, coincexp, isext, outdir):
-    """Execute a single run"""
-    t = 0.8
-
-    random.seed(runid); np.random.seed(runid) # Random seed
-
-    if isext:
-        name = os.path.basename(top).replace('.graphml', '')
-        name = name.replace('_es.tsv', '')
-    else:
-        name = top
-    expidstr = '{}_{}_{}_{}_{:03d}'.format(name, nreq, k, h, runid)
-    info(expidstr)
-    tmpfile = pjoin('/tmp/del.png')
-
-
-    visdir = pjoin(outdir, 'vis')
-    os.makedirs(visdir, exist_ok=True)
-    op = {'grorig': pjoin(visdir, '{}_grorig.png'.format(expidstr)),
-          'grcoinc': pjoin(visdir, '{}_grcoinc.png'.format(expidstr))}
-
-    g, adj = generate_graph(top, nreq, k, outdir)
-    n = g.vcount()
-    info('n,k:{},{}'.format(n, np.mean(g.degree())))
-    vszs = np.array(g.degree()) + 1 # In case it is zero
-
-    # vlbls = [str(i) for i in range(g.vcount())]
-    vlbls = None
-
-    coords1 = plot_graph(g, None, vlbls, vszs, tmpfile) # It is going to be overwriten
-    vfeats, featlbls = extract_features(adj, g, h)
-    coinc = get_coincidx_values(vfeats, .5, coincexp, False)
-
-    # maxdist = g.diameter() + 1
-    maxdist = 15
-
+def calculate_autorelation(g, coinc, maxdist):
     # For each vx, calculate autorelation across neighbours
+    n = g.vcount()
     means = np.zeros((n, maxdist), dtype=float)
     stds = np.zeros((n, maxdist), dtype=float)
     for v in range(n):
         dists = np.array(g.distances(source=v, mode='all')[0])
-        dists[v] = 9999999 # By default, in a simple graph, a node is not a neighbour of itself
+        dists[v] = 9999999 # In a simple graph, there's no self-loop
         for l in range(1, maxdist):
             neighs = np.where(dists == l)[0]
             if len(neighs) == 0: continue
             aux = coinc[v, neighs]
-            means[v, l], stds[v, l]  = np.mean(aux), np.std(aux)
+            means[v, l-1], stds[v, l-1]  = np.mean(aux), np.std(aux)
+    return means, stds
 
-
-    # Use autorelation for neighsize={0:maxdist} as features
-    coinc = threshold_values(coinc, t)
-
-    # Plot the autorelation curves (one for each vertex)
+##########################################################
+def plot_curves_and_avg(curves, ylbl, plotpath):
+    """Plot the autorelation curves (one for each vertex)"""
     W = 640; H = 480
     fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
-    xs = range(1, maxdist)
-    for v in range(n):
-        ys = means[v, 1:]
+    maxx = curves.shape[1]
+    xs = range(1, maxx + 1)
+    for v in range(len(curves)):
+        ys = curves[v, :]
         ax.plot(xs, ys)
-    ys = np.mean(means[:, 1:], axis=0) # Average of the means
+    ys = np.mean(curves, axis=0) # Average of the means
     ax.plot(xs, ys, color='k')
-    outpath = pjoin(visdir, '{}_autorel.png'.format(expidstr))
-    plt.savefig(outpath); plt.close()
-    ys1 = ys
+    ax.set_ylim(0, 1)
+    ax.set_xlabel('Shift')
+    ax.set_ylabel(ylbl)
+    plt.savefig(plotpath); plt.close()
 
-    coords2 = plot_graph_adj(coinc, None, vlbls, vszs, op['grcoinc'])
-    gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
-    gcoinc = label_communities(gcoinc, CID, vszs, op['grcoinc'])
+##########################################################
+def run_experiment(top, n, k, runid, coincexp, outdir):
+    """Single run"""
+    t = 0.8
+    maxdist = 15 # maxdist = g.diameter() + 1
+
+    isext = top.endswith('.tsv')
+    random.seed(runid); np.random.seed(runid) # Random seed
+
+    gid = os.path.basename(top).replace('_es.tsv', '') if isext else top
+
+    expidstr = '{}_{:03d}'.format(gid, runid)
+    info(expidstr)
+    tmpfile = pjoin('/tmp/del.png')
+
+    visdir = pjoin(outdir, 'vis')
+    os.makedirs(visdir, exist_ok=True)
+
+    netorig = pjoin(visdir, '{}_grorig.png'.format(expidstr))
+    netcoinc = pjoin(visdir, '{}_grcoinc.png'.format(expidstr))
+
+    g, adj = generate_graph(top, n, k)
+    n = g.vcount()
+    info('n,k:{},{}'.format(n, np.mean(g.degree())))
+
+    vfeats, featlbls = extract_features(adj, g)
+    coinc0 = get_coincidx_values(vfeats, .5, coincexp, False)
+    means, stds = calculate_autorelation(g, coinc0, maxdist)
+    coinc = threshold_values(coinc0, t)
+    plotpath = pjoin(visdir, '{}_autorel.png'.format(expidstr))
+    plot_curves_and_avg(means, '', plotpath)
+
+    ys = np.mean(means, axis=0)
+
+    # coords2 = plot_graph_adj(coinc, None, vlbls, vszs, op['grcoinc'])
+    # gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
+    # gcoinc = label_communities(gcoinc, CID, vszs, op['grcoinc'])
     # _ = plot_graph2(gcoinc, None, None, vszs, mincompsz, op['grcoinc']) # Overwrite
 
-    g.vs[CID] = gcoinc.vs[CID]
-    membstr = [str(x) for x in g.vs[CID]]
+    # g.vs[CID] = gcoinc.vs[CID]
+    # membstr = [str(x) for x in g.vs[CID]]
 
-    # _ = plot_graph(g, coords1, vlbls, vszs, tmpfile)
     nclusters = 4
-    z = hierarchy.ward(means[:, 1:])
+    z = hierarchy.ward(means)
     grps = hierarchy.cut_tree(z, n_clusters=nclusters).flatten()
 
     scipy.cluster.hierarchy.set_link_color_palette(PALETTE)
@@ -535,6 +493,8 @@ def run_experiment(top, nreq, k, h, runid, mincompsz, coincexp, isext, outdir):
     lcolours = np.array(dendr['leaves_color_list'])
 
     plt.savefig(pjoin(visdir, '{}_dendr.png'.format(expidstr)))
+    breakpoint()
+    
 
     vcolours = []
     for i in range(n):
@@ -642,46 +602,72 @@ def plot_pca(df, tops, exts, nruns, outdir):
     plt.savefig(outpath)
 
 ##########################################################
-def run_experiments(cfg, nprocs, outpath, outdir):
+def export_params(tops, n, k, espath, coincexp, nruns, outdir):
+    p = {
+        'refmodel': espath, 'n': n, 'k': k,
+        'coincexp': coincexp, 'nruns': nruns}
+    outpath = pjoin(outdir, 'params.json')
+    json.dump(p, open(outpath, 'w'))
+
+##########################################################
+def run_group(espath, tops, nruns, coincexp, nprocs, outdir):
     """Spawl jobs"""
+    outpath = pjoin(outdir, 'res.csv')
     if os.path.isfile(outpath): return pd.read_csv(outpath)
+    os.makedirs(outdir, exist_ok=True)
 
-    tops = cfg['modeltop']
-    ns = cfg['modeln']
-    ks = cfg['modelk']
-    hs = cfg['h']
-    coincexp = cfg['coincexp']
-    exts = cfg['extmodel']
-    mincompsz = 4
-    runids = range(cfg['nruns'])
+    # Get the n,m,k from the reference network
+    g, adj = generate_graph(espath, 0, 0) # connected and undirected
+    n, m = [g.vcount()], [g.ecount()]
+    k = [n[0] / m[0] * 2]
 
-    argsconcat = list(product(tops, ns, ks,  hs, runids, [mincompsz], coincexp, [False], [outdir]))
-    args_ = product(exts, [-1], [-1],  hs, [0], [mincompsz], coincexp, [True], [outdir])
-    argsconcat.extend(list(args_))
-    params = np.array([x[:-1] for x in argsconcat], dtype=object)
+    export_params(tops, n, k, espath, coincexp, nruns, outdir)
+
+    runids = range(nruns)
+    args1 = [[espath, 0, 0, 0, coincexp, outdir]]
+    args2 = list(product(tops, n, k, runids, [coincexp], outdir))
+    argsconcat = args1 + args2
+    # args_ = product(exts, [-1], [-1],  [0], [mincompsz], coincexp, [True], [outdir])
+    # argsconcat.extend(list(args_))
+    # params = np.array([x[:-1] for x in argsconcat], dtype=object)
 
     featsall = parallelize(run_experiment, nprocs, argsconcat)
+
     featsall = np.array(featsall, dtype=object)
-    numds = featsall.shape[1]
+    nshifts = featsall.shape[1]
     featsall = np.column_stack((params, featsall))
+
     cols1 = ['model', 'nreq', 'k', 'h', 'runid', 'coincexp', 'isext', 'nreal']
-    cols2 = ['d{:02d}'.format(d) for d in range(1, numds + 1)]
+    cols2 = ['d{:02d}'.format(d) for d in range(1, nshifts + 1)]
+
     cols = cols1 + cols2
     df = pd.DataFrame(featsall.tolist(), columns=cols)
     df.to_csv(outpath, index=False, float_format='%.3f')
-    return df
+    return df, nshifts
+    # plot_pca(df.iloc[:, -nlags:], cfg['modeltop'], cfg['extmodel'],
+             # cfg['nruns'], outdir)
 
 ##########################################################
-def main(cfgpath, nprocs, outdir):
+def main(cfgpath, nruns, nprocs, outrootdir):
     info(inspect.stack()[0][3] + '()')
 
     cfg = json.load(open(cfgpath))
-    outpath = pjoin(outdir, 'res.csv')
 
-    df = run_experiments(cfg, nprocs, outpath, outdir)
+    tops = ['ba', 'er', 'ws']
+    coincexp = cfg['coincexp'][0]
+    netdirs = cfg['netdirs']
+    labels = cfg['labels']
+    # runids = range(nruns)
 
-    plot_pca(df.iloc[:, 8:], cfg['modeltop'], cfg['extmodel'],
-             cfg['nruns'], outdir)
+    nets, ns, ks = [], [], []
+    for d, lbl in zip(netdirs, labels):
+        fs = os.listdir(d)
+        for f in fs:
+            if not f.endswith('_es.tsv'): continue
+            fid = f.replace('_es.tsv', '')
+            espath = pjoin(d, f)
+            outdir = pjoin(outrootdir, lbl, fid)
+            run_group(espath, tops, nruns, coincexp, nprocs, outdir)
 
 ##########################################################
 if __name__ == "__main__":
@@ -689,6 +675,7 @@ if __name__ == "__main__":
     t0 = time.time()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', default='config/toy01.json', help='Experiments settings')
+    parser.add_argument('--nruns', default=30, type=int, help='Number of runs for the growth models')
     parser.add_argument('--nprocs', default=1, type=int, help='Number of procs')
     parser.add_argument('--outdir', default='/tmp/out/', help='Output directory')
     args = parser.parse_args()
@@ -696,6 +683,6 @@ if __name__ == "__main__":
     os.makedirs(args.outdir, exist_ok=True)
     readmepath = create_readme(sys.argv, args.outdir)
     shutil.copy(args.config, args.outdir)
-    main(args.config, args.nprocs, args.outdir)
+    main(args.config, args.nruns, args.nprocs, args.outdir)
     info('Elapsed time:{:.02f}s'.format(time.time()-t0))
     info('Output generated in {}'.format(args.outdir))
