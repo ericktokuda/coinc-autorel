@@ -307,19 +307,20 @@ def plot_curves_and_avg(curves, ylbl, plotpath):
 ##########################################################
 def plot_dendrogram(means, nclusters, expidstr, outdir):
     z = hierarchy.ward(means)
-    grps = hierarchy.cut_tree(z, n_clusters=nclusters).flatten() # Not used
+    grps = hierarchy.cut_tree(z, n_clusters=nclusters).flatten()
     uids, counts = np.unique(grps, return_counts=True)
     sortedid = np.argsort(counts)
-    palette = np.array(PALETTE)[sortedid[::-1]]
 
-    colleav = [palette[grp] for grp in grps]
+    colleav = np.array(['#ABB2B9'] * len(grps))
+    for i, id in enumerate(sortedid[::-1]):
+        inds = np.where(grps == id)[0]
+        colleav[inds] = PALETTE[i]
+
     nlinks = len(z)
     collnks = {}
 
     for i in range(nlinks):
         clid1, clid2 = np.array(z[i, :2]).astype(int)
-        if clid1 <= nlinks:
-            c1 = colleav[clid1]
         c1 = colleav[clid1] if clid1 <= nlinks else collnks[clid1]
         c2 = colleav[clid2] if clid2 <= nlinks else collnks[clid2]
         collnks[nlinks+i+1] = c1 if c1 == c2 else 'blue'
@@ -353,7 +354,6 @@ def run_experiment(top, n, k, runid, coincexp, outdir):
 
     expidstr = '{}_{:02d}'.format(gid, runid)
     info(expidstr)
-    tmpfile = pjoin('/tmp/del.png')
 
     visdir = pjoin(outdir, 'vis')
     os.makedirs(visdir, exist_ok=True)
