@@ -252,16 +252,26 @@ def get_rgg_params(nvertices, avgdegree):
     return r
 
 ##########################################################
-def plot_graph(g, coordsin, labels, vsizes, vcolours, outpath):
+def plot_graph(g, coordsin, labels, vszs, vcolours, outpath):
     coords = np.array(g.layout(layout='fr')) if coordsin is None else coordsin
+
+    if vszs != None: # Normalize between 5 and 15
+        vszs = (vszs - np.min(vszs))/ (np.max(vszs) - np.min(vszs))
+        vszs = vszs  * 10 + 5
+
     visual_style = {}
     visual_style["layout"] = coords
     visual_style["bbox"] = (960, 960)
     visual_style["margin"] = 10
     visual_style['vertex_label'] = labels
-    visual_style['vertex_color'] = vcolours
-    visual_style['vertex_size'] = 10
+    visual_style['vertex_color'] = 'blue' if vcolours == None else vcolours
+    visual_style['vertex_size'] = vszs
     visual_style['vertex_frame_width'] = 0
+
+    # widths = np.array(g.es['weight'])
+    # widths[widths < 0] = 0
+    # visual_style['edge_width'] = np.abs(widths)
+
     igraph.plot(g, outpath, **visual_style)
     return coords
 
@@ -372,12 +382,11 @@ def run_experiment(top, n, k, runid, coincexp, outdir):
     plotpath = pjoin(visdir, '{}_autorel.png'.format(expidstr))
     plot_curves_and_avg(means, '', plotpath)
 
-    gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
-    coords1 = plot_graph(gcoinc, None, None, None, None, netcoinc)
-
     colleav = plot_dendrogram(means, nclusters, expidstr, visdir)
 
-    coords1 = plot_graph(g, None, None, None, colleav, netorig)
+    gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
+    coords1 = plot_graph(gcoinc, None, None, g.vs.degree(), colleav, netcoinc)
+    coords2 = plot_graph(g, None, None, None, None, netorig)
     return np.mean(means, axis=0)
 
 ###########################################################
