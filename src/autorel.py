@@ -255,7 +255,7 @@ def get_rgg_params(nvertices, avgdegree):
 def plot_graph(g, coordsin, labels, vszs, vcolours, outpath):
     coords = np.array(g.layout(layout='fr')) if coordsin is None else coordsin
 
-    if vszs != None: # Normalize between 5 and 15
+    if vszs != None and type(vszs) != int: # Normalize between 5 and 15
         vszs = (vszs - np.min(vszs))/ (np.max(vszs) - np.min(vszs))
         vszs = vszs  * 10 + 5
 
@@ -385,8 +385,8 @@ def run_experiment(top, n, k, runid, coincexp, outdir):
     colleav = plot_dendrogram(means, nclusters, expidstr, visdir)
 
     gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
-    coords1 = plot_graph(gcoinc, None, None, g.vs.degree(), colleav, netcoinc)
-    coords2 = plot_graph(g, None, None, None, None, netorig)
+    coords1 = plot_graph(gcoinc, None, None, g.vs.degree(), None, netcoinc)
+    coords2 = plot_graph(g, None, None, None, colleav, netorig)
     return np.mean(means, axis=0)
 
 ###########################################################
