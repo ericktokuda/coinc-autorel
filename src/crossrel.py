@@ -84,10 +84,12 @@ def get_coincidx_values(dataorig, alpha, coincexp, standardize):
 ##########################################################
 def extract_simple_feats_all(adj, g):
     # info(inspect.stack()[0][3] + '()')
-    labels = 'dg cl'.split(' ')
+    # labels = 'dg cl'.split(' ')
+    labels = 'dg dg'.split(' ')
     feats = []
-    cl = np.array(g.transitivity_local_undirected(mode=igraph.TRANSITIVITY_ZERO))
+    # cl = np.array(g.transitivity_local_undirected(mode=igraph.TRANSITIVITY_ZERO))
     deg = np.array(g.degree()) # np.array(np.sum(adj, axis=0)).flatten()
+    cl = np.array(g.degree()) # np.array(np.sum(adj, axis=0)).flatten()
     feats = np.vstack((deg, cl)).T
     return feats, labels
 
@@ -233,8 +235,22 @@ def plot_graph(g, dfref, diffsums, lbl, outdir):
     vszs = (vszs - min0) / (max0 - min0)
     vszs = vszs * 10 + 5
     vcols = 'blue'
-    plotpath = pjoin(outdir, '{}_netw.png'.format(lbl))
     igraph.plot(g, plotpath, vertex_size=vszs, vertex_color=vcols)
+
+##########################################################
+def plot_networks(gs, dfref, diffsums, labels, outdir):
+
+    vclr = 'blue'
+    vszs = (diffsums - np.min(diffsums)) / (np.max(diffsums) - np.min(diffsums))
+    vszs = (vszs * 10) + 5
+
+    gsind = []
+    for i in range(2):
+        z = [gs[i].vs.find(wid=x).index for x in dfref.wid.values]
+        gsind.append(gs[i].induced_subgraph(z))
+        if i == 0: coords = gsind[-1].layout('fr')
+        plotpath = pjoin(outdir, '{}_netw.png'.format(labels[i]))
+        igraph.plot(gsind[i], plotpath, layout=coords, vertex_size=vszs, vertex_color=vclr)
 
 ##########################################################
 def run_group(f, netdirs, labels, coincexp, nprocs, outdir):
@@ -257,7 +273,7 @@ def run_group(f, netdirs, labels, coincexp, nprocs, outdir):
     featsall = parallelize(run_experiment, nprocs, argsconcat)
     diffs = plot_abs_diff(featsall[0][0], featsall[1][0], lbl, outdir)
     diffsums = plot_diff_sums_hist(diffs, lbl, outdir)
-    plot_graph(gs[0], dfref, diffsums, lbl, outdir)
+    plot_networks(gs, dfref, diffsums, labels, outdir)
 
 ##########################################################
 def calculate_crossrelation(dfref, g, coinc, maxdist):
