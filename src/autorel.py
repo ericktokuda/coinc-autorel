@@ -77,90 +77,12 @@ def get_coincidx_values(dataorig, alpha, coincexp, standardize):
     return adj
 
 ##########################################################
-def get_reachable_vertices_exact(adj, vs0, h):
-    """Get the vertices reachable in *exactly* h steps. This
-    implies that, for instance, self may be included in the result."""
-    if h == 0: return vs0, adj
-
-    adjh = adj
-    for i in range(h-1):
-        adjh = np.dot(adjh, adj)
-
-    rows, cols = adjh.nonzero()
-    reachable = []
-    for v in vs0:
-        z = cols[np.where(rows == v)]
-        reachable.extend(z)
-
-    return reachable, adjh
-
-##########################################################
-def get_neighbourhood(adj, vs0, h, itself=False):
-    """Get the entire neighbourhood centered on vs0, including self"""
-    if h == 0: return vs0 if itself else []
-    neighsprev, _ = get_reachable_vertices_exact(adj, vs0, h - 1)
-    neighs, _ =  get_reachable_vertices_exact(adj, vs0, h)
-    diff = set(neighsprev).union(set(neighs))
-    if itself: return diff
-    else: return diff.difference(set(vs0))
-
-##########################################################
-def get_ring(adj, vs0, h):
-    """Get the hth rings"""
-    if h == 0: return []
-    neigh1 = get_neighbourhood(adj, vs0, h-1)
-    neigh2 = get_neighbourhood(adj, vs0, h)
-    return list(set(neigh2).difference(set(neigh1)))
-
-##########################################################
-def calculate_hiennodes(neighvs): # OK
-    return len(neighvs)
-
-##########################################################
-def calculate_hienedges(adj, ringcur):
-    return adj[ringcur, :][:, ringcur].sum() / 2
-
-##########################################################
-def calculate_hierdegree(adj, ringcur, ringnxt):
-    return adj[ringcur, :][:, ringnxt].sum()
-
-##########################################################
-def calculate_hierclucoeff(he, hn):
-    if hn == 1: return 0
-    return 2 * (he / (hn * (hn - 1)))
-
-##########################################################
-def calculate_hieconvratio(hd, hnnxt):
-    if hnnxt == 0: return 0
-    return hd / hnnxt
-
-##########################################################
-def extract_hirarchical_feats(adj, v, h):
-    """Extract hierarchical features"""
-    ringcur = get_ring(adj, [v], h)
-    ringnxt = get_ring(adj, [v], h+1)
-    hn = calculate_hiennodes(ringcur)
-    he = calculate_hienedges(adj, ringcur)
-    hd = calculate_hierdegree(adj, ringcur, ringnxt)
-    hc = calculate_hierclucoeff(he, hn)
-    cr = calculate_hieconvratio(hd, calculate_hiennodes(ringnxt))
-    return [hn, he, hd, hc, cr]
-
-##########################################################
-def extract_hierarchical_feats_all(adj,  h):
-    # info(inspect.stack()[0][3] + '()')
-    labels = 'hn he hd hc cr'.split(' ')
-    feats = []
-    for v in range(adj.shape[0]):
-        feats.append(extract_hirarchical_feats(adj, v, h))
-    return feats, labels
-
-##########################################################
 def extract_simple_feats_all(adj, g):
     # info(inspect.stack()[0][3] + '()')
     labels = 'dg cl'.split(' ')
     feats = []
-    cl = np.array(g.transitivity_local_undirected(mode=igraph.TRANSITIVITY_ZERO))
+    # cl = np.array(g.transitivity_local_undirected(mode=igraph.TRANSITIVITY_ZERO))
+    cl = np.array(g.degree()) # np.array(np.sum(adj, axis=0)).flatten()
     deg = np.array(g.degree()) # np.array(np.sum(adj, axis=0)).flatten()
     feats = np.vstack((deg, cl)).T
     return feats, labels
