@@ -174,7 +174,8 @@ def plot_networks(gs, dfref, diffsums, labels, outdir):
         z = [gs[i].vs.find(wid=x).index for x in dfref.wid.values]
         gsind.append(gs[i].induced_subgraph(z))
         vlbl = [str(x) for x in range(gsind[i].vcount())]
-        if i == 0: coords = gsind[-1].layout('fr')
+        # if i == 0: coords = gsind[-1].layout('fr')
+        coords = 'fr'
         plotpath = pjoin(outdir, '{}_netw.png'.format(labels[i]))
         igraph.plot(gsind[i], plotpath, layout=coords, vertex_size=vszs, vertex_color=vclr,
                     vertex_label=vlbl, bbox=bbox)
@@ -243,10 +244,7 @@ def plot_curves_and_avg(curves, ylbl, plotpath):
     plt.savefig(plotpath); plt.close()
 
 ##########################################################
-def run_experiment(g, lbl, dfref, coincexp, outdir):
-    maxdist = 15 # maxdist = g.diameter() + 1
-    info(lbl)
-
+def run_experiment(g, lbl, dfref, maxdist, coincexp, outdir):
     adj = g.get_adjacency_sparse()
     vfeats, featlbls = extract_features(adj, g)
     coinc = get_coincidx_values(vfeats, .5, coincexp, False)
@@ -329,67 +327,62 @@ def main(cfgpath, nprocs, outdir):
 
     random.seed(0); np.random.seed(0) # Random seed
 
-    coincexp = 1
-    nruns = 1
-    g, _ = generate_graph('ba', 200, 6)
-    degs = np.array(g.degree())
-    k1 = np.quantile(degs, .1, method='nearest')
-    k2 = np.quantile(degs, .9, method='nearest')
-    inds1 = np.where(degs <= k1)[0]
-    inds2 = np.where(degs >= k2)[0]
+    maxdist = 15    # Max distance from the central node
+    coincexp = 1    # Coincidence exponent
+    nruns = 3   # Number of experiments
+    nes = 1    # Number of new edges per run
+    model = 'ba'    # Network growth-model
+    nreq = 200  # Network requested num vertices
+    k = 6   # Network average degree
+    q1, q2 = .1, .9 # Quantiles
+
+    g0, _ = generate_graph(model, nreq, k)
+    n0 = g0.vcount()
+    degs = np.array(g0.degree())
+    k1 = np.quantile(degs, q1, method='nearest')
+    k2 = np.quantile(degs, q2, method='nearest')
+    inds1, inds2 = np.where(degs <= k1)[0], np.where(degs >= k2)[0]
     ids1 = np.random.randint(len(inds1), size=nruns)
     ids2 = np.random.randint(len(inds2), size=nruns)
-    vs1, vs2 = inds1[ids1], inds2[ids2]
+    grps = {'q1': inds1[ids1],
+            'q2': inds2[ids2]}
+    ngrps = len(grps)
 
-    labels = ['original', 'newedge']
+    labels = ['original', 'newedges']
 
-    g.vs['wid'] = range(g.vcount())
-    dfref = pd.DataFrame(range(g.vcount()), columns=['wid'])
+    g0.vs['wid'] = range(g0.vcount())
+    dfref = pd.DataFrame(range(g0.vcount()), columns=['wid'])
 
-    mean0, std0 = run_experiment(g, 'orig', dfref, coincexp, outdir)
+    mean0, std0 = run_experiment(g0, 'orig', dfref, maxdist, coincexp, outdir)
 
-    means, stds = [], []
-    for i, v0 in enumerate(vs2):
-        g2 = g.copy()
-        neighs = [x.index for x in g2.vs[v0].neighbors()]
-        while True:
-            x = np.random.randint(g2.vcount())
-            if not (x in neighs + [v0]): break
+    means = np.zeros((ngrps, nruns, n0, maxdist), dtype=float)
+    stds = means.copy()
 
-        v0, x = (22, 63)
-        # v0, x = (117, 194)
-        breakpoint()
-        
-        g2.add_edge(v0, x)
-        print(v0, x)
-        ret = run_experiment(g2, 'new', dfref, coincexp, outdir)
-        means.append(ret[0]); stds.append(ret[1])
-        break
-        
+    for i, q in enumerate(grps.keys()): # For each quantile
+        info('grp: {}'.format(q))
+        for r in range(nruns): # For each run
+            info('run: {}/{}'.format(r, nruns))
+            g1 = g0.copy()
+            for j, v in enumerate(grps[q]): # For each source vx
+                neighs0 = [x.index for x in g0.vs[v].neighbors()]
+                vsnlink = list(set(range(n0)).difference(neighs0)) # Non-linked vertices
+                np.random.shuffle(vsnlink)
+                es = [[v, v2] for v2 in vsnlink[:nes]]
+                g1.add_edges(es)
+            ret = run_experiment(g1, 'new', dfref, maxdist, coincexp, outdir)
+            means[i, r, :, :], stds[i, r, :, :] = ret
 
-    mean1, std1 = means[0], stds[0]
-    diffs = plot_abs_diff(mean0, mean1, 'ba', outdir)
-    diffsums = plot_diff_sums_hist(diffs, 'ba', outdir)
-    plot_networks([g, g2], dfref, diffsums, labels, outdir)
-    breakpoint()
-    
+    for i, q in enumerate(grps.keys()):
+        outdir2 = pjoin(outdir, q)
+        os.makedirs(outdir2, exist_ok=True)
 
-# def generate_graph(model, n, k):
-    cfg = json.load(open(cfgpath))
-    respath = pjoin(outdir, 'res.csv')
+        means1, stds1 = means[i, :, :, :], stds[i, :, :, :]
+        mean1 = np.mean(means1, axis=0)
+        std1 = np.mean(stds1, axis=0)
 
-    coincexp = cfg['coincexp']
-    netdirs = cfg['netdirs']
-    labels = cfg['labels']
-
-    if len(netdirs) < 2:
-        info('There should be at least two folders (cross-relation)')
-        return
-
-    suffs = get_suff_of_pairs((find_common_files(netdirs)))
-
-    for suff in suffs:
-        run_group(suff, netdirs, labels, coincexp, nprocs, outdir)
+        diffs = plot_abs_diff(mean0, mean1, 'ba', outdir2)
+        diffsums = plot_diff_sums_hist(diffs, 'ba', outdir2)
+        plot_networks([g0, g1], dfref, diffsums, labels, outdir2)
 
 ##########################################################
 if __name__ == "__main__":
