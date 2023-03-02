@@ -55,7 +55,10 @@ def main(snappath, idspath, outdir):
     info('idspath:{}'.format(idspath))
 
     f = os.path.basename(idspath)
-    suff = '_'.join(f.split('_')[:-1])
+    if '_max2.tsv' in f:
+        suff = '_'.join(f.split('_')[:-1])
+    else:
+        suff = f.split('.')[0]
 
     outpath1 = pjoin(outdir, '{}_vs.tsv'.format(suff))
     outpath2 = pjoin(outdir, '{}_es.tsv'.format(suff))
