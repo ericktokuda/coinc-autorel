@@ -26,6 +26,7 @@ from utils import create_graph_from_dataframes
 
 CID = 'compid'
 PALETTE = ['#4daf4a', '#e41a1c', '#ff7f00', '#984ea3', '#ffff33', '#a65628', '#377eb8']
+W = 640; H = 480
 
 ##########################################################
 def interiority(dataorig):
@@ -135,7 +136,6 @@ def plot_abs_diff(feat1, feat2, lbl, outdir):
 def plot_diff_sums_hist(diffs, lbl, outdir):
     sums = np.sum(diffs, axis=1)
     plotpath = pjoin(outdir, '{}_diffsum.png'.format(lbl))
-    W = 640; H = 480
     fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
     ax.hist(sums, bins=50)
     ax.set_xlabel('Sum of crossrelation across the neighbours of each node')
@@ -209,7 +209,6 @@ def plot_crossrelation(means, stds, lbl, outdir):
 ##########################################################
 def plot_curves_and_avg(curves, ylbl, plotpath):
     """Plot the autorelation curves (one for each vertex)"""
-    W = 640; H = 480
     fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
     maxx = curves.shape[1]
     xs = range(1, maxx + 1)
@@ -349,8 +348,10 @@ def run_model(model, nreq, k, q1, q2, maxdist, coincexp, nes, nruns,
     stds = means.copy()
 
     g1s = []
+    esall = {}
     for i, q in enumerate(grps.keys()): # For each quantile
         info('grp: {}'.format(q))
+        esall[q] = []
         for r in range(nruns): # For each run
             info('run: {}/{}'.format(r, nruns))
             g1 = g0.copy()
@@ -361,8 +362,10 @@ def run_model(model, nreq, k, q1, q2, maxdist, coincexp, nes, nruns,
                 np.random.shuffle(vsnlink)
                 es = [[v, v2] for v2 in vsnlink[:nes]]
                 g1.add_edges(es)
+                esall[q].extend(es)
             g1s.append(g1)
-            ret = run_experiment(g1, 'new', dfref, maxdist, coincexp, outdir)
+            ret = run_experiment(g1, 'new', dfref, maxdist, coincexp,
+                                 outdir)
             means[i, r, :, :], stds[i, r, :, :] = ret
 
     coords = None
@@ -377,12 +380,27 @@ def run_model(model, nreq, k, q1, q2, maxdist, coincexp, nes, nruns,
         diffs = plot_abs_diff(mean0, mean1, 'model', outdir2)
         diffsums = plot_diff_sums_hist(diffs, 'model', outdir2)
 
-        W = 640; H = 480
+        x0, x1 = 0, 25
         fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
         ax.scatter(degs, diffsums)
         ax.set_xlabel('Degree')
+        ax.set_xlim(x0, x1)
+        ax.set_ylim(bottom=0)
         ax.set_ylabel('Sum of absolute difference')
         outpath = pjoin(outdir2, 'deg_vs_diffsum.png'.format(q))
+        plt.savefig(outpath)
+
+        inds1 = set(grps['q1'])
+        inds2 = set(range(n0))
+        inds3 = np.array(list(inds2.difference(inds1)))
+
+        fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
+        ax.scatter(degs[inds3], diffsums[inds3])
+        ax.set_xlabel('Degree')
+        ax.set_xlim(x0, x1)
+        ax.set_ylim(bottom=0)
+        ax.set_ylabel('Sum of absolute difference')
+        outpath = pjoin(outdir2, 'deg_vs_diffsum2.png'.format(q))
         plt.savefig(outpath)
 
         coords = plot_networks([g0, g1s[i]], grps[q], dfref, diffsums,
