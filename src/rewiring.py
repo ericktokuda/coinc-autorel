@@ -126,14 +126,16 @@ def plot_networks(gs, vschg, dfref, diffsums, coords, labels, outdir):
 
     gsind = []
     for i in range(2):
+        plotpath = pjoin(outdir, '{}_netw.png'.format(labels[i]))
         z = [gs[i].vs.find(wid=x).index for x in dfref.wid.values]
         gsind.append(gs[i].induced_subgraph(z))
         # vlbl = [str(x) for x in range(gsind[i].vcount())]
         vlbl = None
         if coords == None: coords = gsind[-1].layout('fr')
-        plotpath = pjoin(outdir, '{}_netw.png'.format(labels[i]))
-        igraph.plot(gsind[i], plotpath, layout=coords, vertex_size=vszs, vertex_color=vclr,
-                    vertex_label=vlbl, bbox=bbox)
+
+        if isfile(plotpath): continue
+        igraph.plot(gsind[i], plotpath, layout=coords, vertex_size=vszs,
+                    vertex_color=vclr, vertex_label=vlbl, bbox=bbox)
     return coords
 
 ##########################################################
@@ -260,9 +262,9 @@ def main(nprocs, outdir):
 
     random.seed(0); np.random.seed(0) # Random seed
 
-    maxdist = 15    # Max distance from the central node
+    maxdist = 25    # Max distance from the central node
     coincexp = 1    # Coincidence exponent
-    nruns = 3   # Number of experiments
+    nruns = 50   # Number of experiments
     nes = 1    # Number of new edges per run
     models = ['ba', 'er']    # Network growth-model
     nreq = 200  # Network requested num vertices
@@ -270,8 +272,7 @@ def main(nprocs, outdir):
     q1, q2 = .1, .9 # Quantiles
 
     for model in models:
-        run_model(model, nreq, k, q1, q2, maxdist, coincexp, nes, nruns,
-                  pjoin(outdir, model))
+        run_model(model, nreq, k, q1, q2, maxdist, coincexp, nes, nruns, outdir)
 
 ##########################################################
 def plot_deg_vs_diffsum(degs, diffsum, xlim, outpath):
@@ -283,7 +284,7 @@ def plot_deg_vs_diffsum(degs, diffsum, xlim, outpath):
     ax.set_xlim(*xlim)
     ax.set_ylim(bottom=0)
     ax.set_ylabel('Sum of absolute difference')
-    plt.savefig(outpath)
+    plt.savefig(outpath); plt.close()
 
 ##########################################################
 def run_model(model, nreq, k, q1, q2, maxdist, coincexp, nes, nruns,
@@ -291,7 +292,6 @@ def run_model(model, nreq, k, q1, q2, maxdist, coincexp, nes, nruns,
     """Short description """
     info(inspect.stack()[0][3] + '()')
 
-    os.makedirs(outdir, exist_ok=True)
     g0, _ = generate_graph(model, nreq, k)
     n0 = g0.vcount()
 
@@ -305,11 +305,11 @@ def run_model(model, nreq, k, q1, q2, maxdist, coincexp, nes, nruns,
     g0.vs['wid'] = range(g0.vcount())
     dfref = pd.DataFrame(range(g0.vcount()), columns=['wid'])
 
-    lbl0 = 'orig'
+    lbl0 = '{}_orig'.format(model)
     mean0, std0 = run_experiment(g0, lbl0, dfref, maxdist, coincexp,
                                  outdir)
 
-    xlim = (0, 25) # Shifts lim (min and max)
+    xlim = (0, maxdist) # Shifts lim (min and max)
     coords = None
     g1s = []
     esall = {}
@@ -317,10 +317,15 @@ def run_model(model, nreq, k, q1, q2, maxdist, coincexp, nes, nruns,
         info('grp: {}'.format(q))
         esall[q] = []
 
+        inds1, inds2 = set(grps[q]), set(range(n0))
+        inds3 = np.array(list(inds2.difference(inds1)))
+        diffsall = []
+        degsall = []
+
         for r in range(nruns): # For each run
             info('run: {}/{}'.format(r, nruns))
 
-            lbl1 = '{}_{:03d}'.format(q, r)
+            lbl1 = '{}_{}_{:03d}'.format(model, q, r)
 
             # Apply changes to the network
             g1 = g0.copy()
@@ -332,29 +337,33 @@ def run_model(model, nreq, k, q1, q2, maxdist, coincexp, nes, nruns,
                 es = [[v, v2] for v2 in vsnlink[:nes]]
                 g1.add_edges(es)
                 esall[q].extend(es)
-            g1s.append(g1)
+            # g1s.append(g1)
 
             # Extract features and calculate cross relation
-            m1, s1 = run_experiment(g1, lbl1, dfref, maxdist,
-                                    coincexp, outdir)
+            m1, s1 = run_experiment(g1, lbl1, dfref, maxdist, coincexp, outdir)
 
-            mean1, std1 = np.mean(m1), np.mean(s1)
-
+            info('0')
             # Plot differences
-            diffs = plot_abs_diff(mean0, mean1, lbl1, outdir)
-            diffsums = plot_diff_sums_hist(diffs, lbl1, outdir)
+            diffs = plot_abs_diff(mean0, m1, lbl1, outdir)
+            diffs2 = plot_diff_sums_hist(diffs, lbl1, outdir)
+
+            diffsall.extend(diffs2)
+            degsall.extend(degs)
 
             plotpath = pjoin(outdir, '{}_deg_diffsum.png'.format(lbl1, q))
-            plot_deg_vs_diffsum(degs, diffsums, xlim, plotpath)
+            plot_deg_vs_diffsum(degs, diffs2, xlim, plotpath)
 
-            inds1, inds2 = set(grps['q1']), set(range(n0))
-            inds3 = np.array(list(inds2.difference(inds1)))
 
             plotpath = pjoin(outdir, '{}_deg_diffsum2.png'.format(lbl1, q))
-            plot_deg_vs_diffsum(degs[inds3], diffsums[inds3], xlim, plotpath)
+            # breakpoint()
+            plot_deg_vs_diffsum(degs[inds3], diffs2[inds3], xlim, plotpath)
 
-            coords = plot_networks([g0, g1s[i]], grps[q], dfref, diffsums,
+            coords = plot_networks([g0, g1], grps[q], dfref, diffs2,
                                    coords, [lbl0, lbl1], outdir)
+
+        lbl1 = '{}_{}'.format(model, q)
+        plotpath = pjoin(outdir, '{}_deg_diffsum.png'.format(lbl1, q))
+        plot_deg_vs_diffsum(degsall, diffsall, xlim, plotpath)
 
 ##########################################################
 if __name__ == "__main__":
