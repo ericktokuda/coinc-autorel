@@ -26,6 +26,7 @@ from sklearn.cluster import AgglomerativeClustering
 from scipy.cluster import hierarchy
 
 PALETTE = ['#4daf4a', '#e41a1c', '#ff7f00', '#984ea3', '#ffff33', '#a65628', '#377eb8']
+W = 640; H = 480
 
 ##########################################################
 def interiority(dataorig):
@@ -222,7 +223,6 @@ def calculate_autorelation(g, coinc, maxdist):
 ##########################################################
 def plot_curves_and_avg(curves, ylbl, plotpath):
     """Plot the autorelation curves (one for each vertex)"""
-    W = 640; H = 480
     fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
     maxx = curves.shape[1]
     xs = range(1, maxx + 1)
@@ -259,12 +259,11 @@ def plot_dendrogram(means, nclusters, expidstr, outdir):
 
     def colfunc(id): return collnks[id]
 
-    W = 640; H = 480
     fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
     dendr = hierarchy.dendrogram(z, link_color_func=colfunc, ax=ax)
     aux = dendr['leaves']
     lcolours = np.array(dendr['leaves_color_list'])
-    plt.savefig(pjoin(outdir, '{}_dendr.png'.format(expidstr)))
+    plt.savefig(pjoin(outdir, '{}_dendr.png'.format(expidstr))); plt.close()
 
     vcolours = []
     for i in range(len(means)):
@@ -318,7 +317,6 @@ def plot_pca(data, models, refmodel, nruns, outdir):
     # pcs, contribs = transform.get_pc_contribution(evecs)
     coords = np.column_stack([a[:, 0], a[:, 1]]).real
 
-    W = 640; H = 480
     fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
 
     lbl = os.path.basename(refmodel).replace('_es.tsv', '')
@@ -336,7 +334,37 @@ def plot_pca(data, models, refmodel, nruns, outdir):
     plt.tight_layout(rect=[0, 0, 0.95, 1])
     outpath = pjoin(outdir, 'pca.png')
     plt.savefig(outpath); plt.close()
+    return coords
 
+###########################################################
+def plot_pca_together(pcas, models, nruns, outdir):
+    # coords = np.column_stack([a[:, 0], a[:, 1]]).real
+
+    years = sorted(np.unique([s.split('_')[0] for s in pcas.keys()]))
+    fields = sorted(np.unique([s.split('_')[1] for s in pcas.keys()]))
+    y1, y2 = years
+
+    for field in fields:
+        fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
+
+        for y in years:
+            k = '{}_{}'.format(y, field)
+            ax.scatter(pcas[k][0, 0], pcas[k][0, 1], marker='s', label='{} {}'.format(field, y),
+                       c=PALETTE[0])
+
+        coords = pcas[k]
+
+        coords = coords[1:, :]
+        for topid in range(len(models)):
+            i0 = topid * nruns
+            i1 = (topid + 1) * nruns
+            ax.scatter(coords[i0:i1, 0], coords[i0:i1, 1],
+                       label=models[topid], c=PALETTE[topid+1])
+
+        plt.legend(loc='center left', bbox_to_anchor=(1, .5))
+        plt.tight_layout(rect=[0, 0, 0.95, 1])
+        outpath = pjoin(outdir, '{}_pca.png'.format(field))
+        plt.savefig(outpath); plt.close()
 ##########################################################
 def export_params(tops, n, k, espath, coincexp, nruns, outdir):
     p = {
@@ -376,7 +404,8 @@ def run_group(espath, tops, nruns, coincexp, nprocs, outdir):
 
     dfres.to_csv(outpath, index=False, float_format='%.3f')
 
-    plot_pca(avgs, tops, espath, nruns, outdir)
+    coordspca = plot_pca(avgs, tops, espath, nruns, outdir)
+    return coordspca
 
 ##########################################################
 def main(cfgpath, nruns, nprocs, outrootdir):
@@ -390,15 +419,20 @@ def main(cfgpath, nruns, nprocs, outrootdir):
     labels = cfg['labels']
     # runids = range(nruns)
 
+    pcas = {}
     nets, ns, ks = [], [], []
     for d, lbl in zip(netdirs, labels):
         fs = os.listdir(d)
         for f in fs:
             if not f.endswith('_es.tsv'): continue
             fid = f.replace('_es.tsv', '')
+            if not fid in ['Physics', 'Theology']: continue
             espath = pjoin(d, f)
             outdir = pjoin(outrootdir, lbl, fid)
-            run_group(espath, tops, nruns, coincexp, nprocs, outdir)
+            coordspca = run_group(espath, tops, nruns, coincexp, nprocs, outdir)
+            pcas['{}_{}'.format(lbl, fid)] = coordspca
+
+    plot_pca_together(pcas, tops, nruns, outrootdir)
 
 ##########################################################
 if __name__ == "__main__":
