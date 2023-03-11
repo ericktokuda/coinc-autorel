@@ -82,7 +82,6 @@ def extract_simple_feats_all(adj, g):
     # info(inspect.stack()[0][3] + '()')
     labels = 'dg cl'.split(' ')
     feats = []
-    # cl = np.array(g.transitivity_local_undirected(mode=igraph.TRANSITIVITY_ZERO))
     cl = np.array(g.degree()) # np.array(np.sum(adj, axis=0)).flatten()
     deg = np.array(g.degree()) # np.array(np.sum(adj, axis=0)).flatten()
     feats = np.vstack((deg, cl)).T
@@ -320,8 +319,7 @@ def plot_pca(data, models, refmodel, nruns, outdir):
     fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
 
     lbl = os.path.basename(refmodel).replace('_es.tsv', '')
-    ax.scatter(coords[0, 0], coords[0, 1], label=lbl,
-               c=PALETTE[0])
+    ax.scatter(coords[0, 0], coords[0, 1], label=lbl, c=PALETTE[0])
 
     coords = coords[1:, :]
     for topid in range(len(models)):
@@ -342,29 +340,30 @@ def plot_pca_together(pcas, models, nruns, outdir):
 
     years = sorted(np.unique([s.split('_')[0] for s in pcas.keys()]))
     fields = sorted(np.unique([s.split('_')[1] for s in pcas.keys()]))
-    y1, y2 = years
 
     for field in fields:
         fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
+
+        z = pcas['{}_{}'.format(years[1], field)]
+        coords = pcas['{}_{}'.format(years[1], field)][1:, :] # Plot just the data from last year
+
+        for topid in range(len(models)):
+            i0 = topid * nruns
+            i1 = (topid + 1) * nruns
+            ax.scatter(coords[i0:i1, 0], coords[i0:i1, 1],
+                       label=models[topid].upper(), c=PALETTE[topid+1])
 
         for y in years:
             k = '{}_{}'.format(y, field)
             ax.scatter(pcas[k][0, 0], pcas[k][0, 1], marker='s', label='{} {}'.format(field, y),
                        c=PALETTE[0])
-
-        coords = pcas[k]
-
-        coords = coords[1:, :]
-        for topid in range(len(models)):
-            i0 = topid * nruns
-            i1 = (topid + 1) * nruns
-            ax.scatter(coords[i0:i1, 0], coords[i0:i1, 1],
-                       label=models[topid], c=PALETTE[topid+1])
+            print(k, pcas[k][0, 0], pcas[k][0, 1])
 
         plt.legend(loc='center left', bbox_to_anchor=(1, .5))
         plt.tight_layout(rect=[0, 0, 0.95, 1])
         outpath = pjoin(outdir, '{}_pca.png'.format(field))
         plt.savefig(outpath); plt.close()
+
 ##########################################################
 def export_params(tops, n, k, espath, coincexp, nruns, outdir):
     p = {
@@ -377,7 +376,11 @@ def export_params(tops, n, k, espath, coincexp, nruns, outdir):
 def run_group(espath, tops, nruns, coincexp, nprocs, outdir):
     """Spawl jobs"""
     outpath = pjoin(outdir, 'res.csv')
-    if os.path.isfile(outpath): return pd.read_csv(outpath)
+    pcapath = pjoin(outdir, 'pca.csv')
+
+    if os.path.isfile(pcapath):
+        return np.loadtxt(pcapath, delimiter=',')
+
     os.makedirs(outdir, exist_ok=True)
 
     # Get the n,m,k from the reference network
@@ -405,6 +408,7 @@ def run_group(espath, tops, nruns, coincexp, nprocs, outdir):
     dfres.to_csv(outpath, index=False, float_format='%.3f')
 
     coordspca = plot_pca(avgs, tops, espath, nruns, outdir)
+    np.savetxt(pcapath, coordspca, delimiter=',')
     return coordspca
 
 ##########################################################
@@ -426,7 +430,8 @@ def main(cfgpath, nruns, nprocs, outrootdir):
         for f in fs:
             if not f.endswith('_es.tsv'): continue
             fid = f.replace('_es.tsv', '')
-            if not fid in ['Physics', 'Theology']: continue
+            if not fid in ['Physics', 'Theology']: continue #TODO: remove this
+            # if not fid in ['Physics']: continue #TODO: remove this
             espath = pjoin(d, f)
             outdir = pjoin(outrootdir, lbl, fid)
             coordspca = run_group(espath, tops, nruns, coincexp, nprocs, outdir)
