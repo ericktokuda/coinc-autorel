@@ -23,6 +23,7 @@ import shutil
 from sklearn.cluster import AgglomerativeClustering
 from scipy.cluster import hierarchy
 from utils import create_graph_from_dataframes
+from rewiring import plot_deg_vs_diffsum
 
 CID = 'compid'
 PALETTE = ['#4daf4a', '#e41a1c', '#ff7f00', '#984ea3', '#ffff33', '#a65628', '#377eb8']
@@ -238,7 +239,7 @@ def plot_graph(g, dfref, diffsums, lbl, outdir):
     igraph.plot(g, plotpath, vertex_size=vszs, vertex_color=vcols)
 
 ##########################################################
-def plot_networks(gs, dfref, diffsums, labels, outdir):
+def plot_networks(gs, dfref, diffsums, f, labels, outdir):
 
     vclr = 'blue'
     vszs = (diffsums - np.min(diffsums)) / (np.max(diffsums) - np.min(diffsums))
@@ -249,12 +250,14 @@ def plot_networks(gs, dfref, diffsums, labels, outdir):
         z = [gs[i].vs.find(wid=x).index for x in dfref.wid.values]
         gsind.append(gs[i].induced_subgraph(z))
         if i == 0: coords = gsind[-1].layout('fr')
-        plotpath = pjoin(outdir, '{}_netw.png'.format(labels[i]))
+        plotpath = pjoin(outdir, '{}_{}_netw.png'.format(f, labels[i]))
         igraph.plot(gsind[i], plotpath, layout=coords, vertex_size=vszs, vertex_color=vclr)
 
 ##########################################################
 def run_group(f, netdirs, labels, coincexp, nprocs, outdir):
     info(inspect.stack()[0][3] + '()')
+
+    # if not f in ['Physics', 'Theology']: return #TODO: remove this
 
     dfes, dfvs, gs = [], [], []
     for d in netdirs:
@@ -273,7 +276,14 @@ def run_group(f, netdirs, labels, coincexp, nprocs, outdir):
     featsall = parallelize(run_experiment, nprocs, argsconcat)
     diffs = plot_abs_diff(featsall[0][0], featsall[1][0], lbl, outdir)
     diffsums = plot_diff_sums_hist(diffs, lbl, outdir)
-    plot_networks(gs, dfref, diffsums, labels, outdir)
+
+    plot_networks(gs, dfref, diffsums, f, labels, outdir)
+
+    for i in range(2):
+        outpath = pjoin(outdir, '{}_{}_degdiffsum.png'.format(f, labels[i]))
+        z = [gs[i].vs.find(wid=x).index for x in dfref.wid.values]
+        degs = g.vs[z].degree()
+        plot_deg_vs_diffsum(degs, diffsums, (0, 35), outpath)
 
 ##########################################################
 def calculate_crossrelation(dfref, g, coinc, maxdist):
