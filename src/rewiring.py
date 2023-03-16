@@ -121,21 +121,22 @@ def plot_networks(gs, vschg, dfref, diffsums, coords, labels, outdir):
     # vszs = (vszs * 25) + 5
     vszs = np.log(diffsums + .001)
     vszs = (vszs - np.min(vszs)) / (np.max(vszs) - np.min(vszs))
-    vszs = (vszs * 25) + 5
+    vszs = (vszs * 20) + 5
     bbox = (600, 600)
 
     gsind = []
-    for i in range(2):
-        plotpath = pjoin(outdir, '{}_netw.png'.format(labels[i]))
-        z = [gs[i].vs.find(wid=x).index for x in dfref.wid.values]
-        gsind.append(gs[i].induced_subgraph(z))
-        # vlbl = [str(x) for x in range(gsind[i].vcount())]
-        vlbl = None
-        if coords == None: coords = gsind[-1].layout('fr')
+    i = 1 # Just plot the modified network
+    plotpath = pjoin(outdir, '{}_netw.png'.format(labels[i]))
+    z = [gs[i].vs.find(wid=x).index for x in dfref.wid.values]
+    gsind.append(gs[i].induced_subgraph(z))
+    # vlbl = [str(x) for x in range(gsind[i].vcount())]
+    vlbl = None
+    if coords == None: coords = gsind[-1].layout('fr')
 
-        if isfile(plotpath): continue
-        igraph.plot(gsind[i], plotpath, layout=coords, vertex_size=vszs,
+    if not isfile(plotpath):
+        igraph.plot(gsind[0], plotpath, layout=coords, vertex_size=vszs,
                     vertex_color=vclr, vertex_label=vlbl, bbox=bbox)
+
     return coords
 
 ##########################################################
@@ -264,7 +265,7 @@ def main(nprocs, outdir):
 
     maxdist = 25    # Max distance from the central node
     coincexp = 1    # Coincidence exponent
-    nruns = 50   # Number of experiments
+    nruns = 100   # Number of experiments
     nes = 1    # Number of new edges per run
     models = ['ba', 'er']    # Network growth-model
     nreq = 200  # Network requested num vertices
@@ -279,7 +280,8 @@ def plot_deg_vs_diffsum(degs, diffsum, xlim, outpath):
     """Short description """
     info(inspect.stack()[0][3] + '()')
     fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
-    ax.scatter(degs, diffsum)
+    ax.scatter(degs, diffsum, c='blue')
+    # ax.scatter(degs, diffsum, c='blue', alpha=.5)
     ax.set_xlabel('Degree')
     ax.set_xlim(*xlim)
     ax.set_ylim(bottom=0)
@@ -312,10 +314,10 @@ def run_model(model, nreq, k, q1, q2, maxdist, coincexp, nes, nruns,
     xlim = (0, maxdist) # Shifts lim (min and max)
     coords = None
     g1s = []
-    esall = {}
+    # esall = {}
     for i, q in enumerate(grps.keys()): # For each groups of nodes
         info('grp: {}'.format(q))
-        esall[q] = []
+        # esall[q] = []
 
         inds1, inds2 = set(grps[q]), set(range(n0))
         inds3 = np.array(list(inds2.difference(inds1)))
@@ -336,13 +338,12 @@ def run_model(model, nreq, k, q1, q2, maxdist, coincexp, nes, nruns,
                 np.random.shuffle(vsnlink)
                 es = [[v, v2] for v2 in vsnlink[:nes]]
                 g1.add_edges(es)
-                esall[q].extend(es)
+                # esall[q].extend(es)
             # g1s.append(g1)
 
             # Extract features and calculate cross relation
             m1, s1 = run_experiment(g1, lbl1, dfref, maxdist, coincexp, outdir)
 
-            info('0')
             # Plot differences
             diffs = plot_abs_diff(mean0, m1, lbl1, outdir)
             diffs2 = plot_diff_sums_hist(diffs, lbl1, outdir)
@@ -354,9 +355,8 @@ def run_model(model, nreq, k, q1, q2, maxdist, coincexp, nes, nruns,
             plot_deg_vs_diffsum(degs, diffs2, xlim, plotpath)
 
 
-            plotpath = pjoin(outdir, '{}_deg_diffsum2.png'.format(lbl1, q))
-            # breakpoint()
-            plot_deg_vs_diffsum(degs[inds3], diffs2[inds3], xlim, plotpath)
+            # plotpath = pjoin(outdir, '{}_deg_diffsum2.png'.format(lbl1, q))
+            # plot_deg_vs_diffsum(degs[inds3], diffs2[inds3], xlim, plotpath)
 
             coords = plot_networks([g0, g1], grps[q], dfref, diffs2,
                                    coords, [lbl0, lbl1], outdir)
