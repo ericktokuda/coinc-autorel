@@ -1,5 +1,5 @@
 {
-	"netdirs": ["/scratch/tokuda/results/autorelation/20230206-autorel/2014/networks/","/scratch/tokuda/results/autorelation/20230206-autorel/2018/networks/"],
+	"netdirs": ["/scratch/tokuda/results/autorelation/20230206-fields/2014/networks/","/scratch/tokuda/results/autorelation/20230206-fields/2018/networks/"],
 	"labels": ["2014","2018"],
 	"coincexp": [1]
 }
