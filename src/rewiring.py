@@ -107,7 +107,7 @@ def plot_diff_sums_hist(diffs, lbl, outdir):
     plotpath = pjoin(outdir, '{}_diffsum.png'.format(lbl))
     fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
     ax.hist(sums, bins=50)
-    ax.set_xlabel('Sum of crossrelation across the neighbours of each node')
+    ax.set_xlabel('Modification index')
     plt.savefig(plotpath); plt.close()
     return sums
 
@@ -285,7 +285,7 @@ def plot_deg_vs_diffsum(degs, diffsum, xlim, outpath):
     ax.set_xlabel('Degree')
     ax.set_xlim(*xlim)
     ax.set_ylim(bottom=0)
-    ax.set_ylabel('Sum of absolute difference')
+    ax.set_ylabel('Modification index')
     plt.savefig(outpath); plt.close()
 
 ##########################################################

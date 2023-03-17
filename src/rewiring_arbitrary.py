@@ -138,7 +138,7 @@ def plot_diff_sums_hist(diffs, lbl, outdir):
     W = 640; H = 480
     fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
     ax.hist(sums, bins=50)
-    ax.set_xlabel('Sum of crossrelation across the neighbours of each node')
+    ax.set_xlabel('Modification index')
     plt.savefig(plotpath); plt.close()
     return sums
 

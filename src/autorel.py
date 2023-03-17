@@ -311,8 +311,9 @@ def run_experiment(top, n, k, runid, coincexp, outdir):
 
 ###########################################################
 def plot_pca(data, models, refmodel, nruns, outdir):
-    z = np.diff(data, axis=1)
-    a, evecs, evals = transform.pca(z, normalize=True)
+    data = np.diff(data, axis=1) # Notice this line!
+    a, evecs, evals = transform.pca(data, normalize=True)
+
     # pcs, contribs = transform.get_pc_contribution(evecs)
     coords = np.column_stack([a[:, 0], a[:, 1]]).real
 
@@ -335,29 +336,37 @@ def plot_pca(data, models, refmodel, nruns, outdir):
     return coords
 
 ###########################################################
-def plot_pca_together(pcas, models, nruns, outdir):
+def plot_pca_together(avgs, models, nruns, outdir):
     # coords = np.column_stack([a[:, 0], a[:, 1]]).real
 
-    years = sorted(np.unique([s.split('_')[0] for s in pcas.keys()]))
-    fields = sorted(np.unique([s.split('_')[1] for s in pcas.keys()]))
+    years = sorted(np.unique([s.split('_')[0] for s in avgs.keys()]))
+    fields = sorted(np.unique([s.split('_')[1] for s in avgs.keys()]))
 
     for field in fields:
         fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
 
-        z = pcas['{}_{}'.format(years[1], field)]
-        coords = pcas['{}_{}'.format(years[1], field)][1:, :] # Plot just the data from last year
+        avg0 = avgs['{}_{}'.format(years[0], field)][[0], :]
+        avgs2 = avgs['{}_{}'.format(years[1], field)]
+        x = np.vstack((avg0, avgs2))
+        data = np.diff(x, axis=1) # Notice this!
+        a, evecs, evals = transform.pca(data, normalize=True)
+
+        coords = np.column_stack([a[:, 0], a[:, 1]]).real
+
+        coord0 = coords[0, :]
+        coord1 = coords[1, :]
+
+        coords = coords[2:, :]
 
         for topid in range(len(models)):
             i0 = topid * nruns
             i1 = (topid + 1) * nruns
             ax.scatter(coords[i0:i1, 0], coords[i0:i1, 1],
-                       label=models[topid].upper(), c=PALETTE[topid+1])
+                       # label=models[topid].upper(), c=PALETTE[topid+1])
+                       label=models[topid], c=PALETTE[topid+1])
 
-        for y in years:
-            k = '{}_{}'.format(y, field)
-            ax.scatter(pcas[k][0, 0], pcas[k][0, 1], marker='s', label='{} {}'.format(field, y),
-                       c=PALETTE[0])
-            print(k, pcas[k][0, 0], pcas[k][0, 1])
+        ax.scatter(coord0[0], coord0[1], marker='s', label='{} {}'.format(field, years[0]), c=PALETTE[0])
+        ax.scatter(coord1[0], coord1[1], marker='s', label='{} {}'.format(field, years[1]), c=PALETTE[0])
 
         plt.legend(loc='center left', bbox_to_anchor=(1, .5))
         plt.tight_layout(rect=[0, 0, 0.95, 1])
@@ -407,9 +416,10 @@ def run_group(espath, tops, nruns, coincexp, nprocs, outdir):
 
     dfres.to_csv(outpath, index=False, float_format='%.3f')
 
-    coordspca = plot_pca(avgs, tops, espath, nruns, outdir)
-    np.savetxt(pcapath, coordspca, delimiter=',')
-    return coordspca
+    # coordspca = plot_pca(avgs, tops, espath, nruns, outdir)
+    # np.savetxt(pcapath, coordspca, delimiter=',')
+    plot_pca(avgs, tops, espath, nruns, outdir)
+    return avgs
 
 ##########################################################
 def main(cfgpath, nruns, nprocs, outrootdir):
@@ -423,7 +433,7 @@ def main(cfgpath, nruns, nprocs, outrootdir):
     labels = cfg['labels']
     # runids = range(nruns)
 
-    pcas = {}
+    avgs = {}
     nets, ns, ks = [], [], []
     for d, lbl in zip(netdirs, labels):
         fs = os.listdir(d)
@@ -434,10 +444,10 @@ def main(cfgpath, nruns, nprocs, outrootdir):
             # if not fid in ['Physics']: continue #TODO: remove this
             espath = pjoin(d, f)
             outdir = pjoin(outrootdir, lbl, fid)
-            coordspca = run_group(espath, tops, nruns, coincexp, nprocs, outdir)
-            pcas['{}_{}'.format(lbl, fid)] = coordspca
+            r = run_group(espath, tops, nruns, coincexp, nprocs, outdir)
+            avgs['{}_{}'.format(lbl, fid)] = r
 
-    plot_pca_together(pcas, tops, nruns, outrootdir)
+    plot_pca_together(avgs, tops, nruns, outrootdir)
 
 ##########################################################
 if __name__ == "__main__":
