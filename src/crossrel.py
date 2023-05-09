@@ -321,7 +321,7 @@ def plot_curves_and_avg(curves, ylbl, plotpath):
     ys = np.mean(curves, axis=0) # Average of the means
     ax.plot(xs, ys, color='k')
     ax.set_ylim(0, 1)
-    ax.set_xlabel('Shift')
+    ax.set_xlabel('Lag')
     ax.set_ylabel(ylbl)
     plt.savefig(plotpath); plt.close()
 
