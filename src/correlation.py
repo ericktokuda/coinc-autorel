@@ -253,10 +253,8 @@ def plot_networks(gs, dfref, diffsums, f, labels, outdir):
         igraph.plot(gsind[i], plotpath, layout=coords, vertex_size=vszs, vertex_color=vclr)
 
 ##########################################################
-def run_group(f, netdirs, labels, coincexp, nprocs, outdir):
+def run_group(f, netdirs, labels, coincexp, nprocs, outrootdir):
     info(inspect.stack()[0][3] + '()')
-
-    # if not f in ['Physics', 'Theology']: return #TODO: remove this
 
     dfes, dfvs, gs = [], [], []
     for d in netdirs:
@@ -265,7 +263,7 @@ def run_group(f, netdirs, labels, coincexp, nprocs, outdir):
         gs.append(create_graph_from_dataframes(dfes[-1], dfvs[-1], sep='\t', directed=False))
 
     dfref = get_common_vs(dfvs)
-    dfref.to_csv(pjoin(outdir, '{}_ref.tsv'.format(f)), sep='\t', index=False)
+    dfref.to_csv(pjoin(outrootdir, '{}_ref.tsv'.format(f)), sep='\t', index=False)
 
     widsref = dfref.wid.values
 
@@ -275,22 +273,19 @@ def run_group(f, netdirs, labels, coincexp, nprocs, outdir):
             inds.append(g.vs.find(wid=w).index)
         degs = np.array(g.vs.degree())[inds]
 
-    # wids0 = gs[0].vs['wid']
-    # gs[0].vs.degree()
     maxdist = 15
-    coeffs  = calculate_pearson(dfref, gs, maxdist)
 
-    lbl = '_'.join([f, labels[1]])
-    plot_abs_diff(coeffs, lbl, outdir)
-    # diffsums = plot_diff_sums_hist(diffs, lbl, outdir)
-    vcoeffs = np.sum(coeffs, axis=1)
-    plot_networks(gs, dfref, vcoeffs, f, labels, outdir)
+    for simil in ['pear', 'coinc']:
+        outdir = pjoin(outrootdir, simil)
+        os.makedirs(outdir, exist_ok=True)
 
-    # for i in range(2):
-        # outpath = pjoin(outdir, '{}_{}_degdiffsum.png'.format(f, labels[i]))
-        # z = [gs[i].vs.find(wid=x).index for x in dfref.wid.values]
-        # degs = g.vs[z].degree()
-        # plot_deg_vs_diffsum(degs, diffsums, (0, 35), outpath)
+        if simil == 'pear': coeffs  = calculate_pearson(dfref, gs, maxdist)
+        elif simil == 'coinc': coeffs  = calculate_coinc2(dfref, gs, maxdist)
+
+        lbl = '_'.join([f, labels[1]])
+        plot_abs_diff(coeffs, lbl, outdir)
+        vcoeffs = np.sum(coeffs, axis=1)
+        plot_networks(gs, dfref, vcoeffs, f, labels, outdir)
 
 ##########################################################
 def calculate_crossrelation(dfref, g, coinc, maxdist):
@@ -335,6 +330,35 @@ def calculate_pearson(dfref, gs, maxdist):
                 coeffs[i, l] = 0 if math.isnan(coeff) else coeff
 
     return coeffs
+
+##########################################################
+def calculate_coinc2(dfref, gs, maxdist):
+    """Calculate autorelation of the vertices @dfref in @g"""
+    # For each vx, calculate autorelation across neighbours
+    nref = len(dfref)
+    coeffs = np.zeros((nref, maxdist), dtype=float)
+
+    g = gs[0]
+    for i, wid in enumerate(dfref.wid):
+        v = g.vs.find(wid=wid).index
+        dists = np.array(g.distances(source=v, mode='all')[0])
+        dists[v] = 9999999 # By default, in a simple graph, a node is not a neighbour of itself
+        for l in range(1, maxdist):
+            neighs = np.where(dists == l)[0]
+            if len(neighs) == 0:
+                pass
+            elif len(neighs) <= 2:
+                coeffs[i, l] = 0
+            else:
+                degs0 = gs[0].vs[neighs].degree()
+                degs1 = gs[1].vs[neighs].degree()
+                data2 = np.array([degs0, degs1])
+                coeff = coincidence(data2, 0.5, 1.0)
+
+                coeffs[i, l] = 0 if math.isnan(coeff) else coeff
+
+    return coeffs
+
 ##########################################################
 def plot_crossrelation(means, stds, lbl, outdir):
     plotpath = pjoin(outdir, '{}_crossrel.png'.format(lbl))
