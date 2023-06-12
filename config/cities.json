@@ -1,0 +1,6 @@
+{
+	"netdirs": ["/home/posmac/keiji/temp/citiessample/"],
+	"labels": ["cities"],
+	"coincexp": [1],
+	"nruns": [1]
+}
