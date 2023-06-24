@@ -14,7 +14,7 @@ import numpy as np
 import scipy; import scipy.optimize
 import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from myutils import info, create_readme, transform
+from myutils import info, create_readme, transform, plot
 import igraph
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
@@ -24,6 +24,7 @@ import json
 import shutil
 from sklearn.cluster import AgglomerativeClustering
 from scipy.cluster import hierarchy
+import pickle
 
 PALETTE = ['#4daf4a', '#e41a1c', '#ff7f00', '#984ea3', '#ffff33', '#a65628', '#377eb8']
 W = 640; H = 480
@@ -121,19 +122,6 @@ def generate_graph(model, n, k):
     elif model.endswith('.graphml'):
         g = graph.simplify_graphml(model)
         if 'width' in g.edge_attributes(): del g.es['width']
-    elif model == 'sb':
-        if n == 200 and k == 6: p1 = .07
-        elif n == 350 and k == 6: p1 = .04
-        elif n == 500 and k == 6: p1 = .0279
-        elif n == 200 and k == 12: p1 = .0798
-        elif n == 200 and k == 18: p1 = .1197
-        else: p1 = .1
-
-        p2 = p1 / 10
-        pref = np.diag([p1, p1, p1]) + p2
-        n1 = int(n / 3)
-        szs = [n1, n1, n - 2 * n1]
-        g = igraph.Graph.SBM(n, pref.tolist(), szs, directed=False, loops=False)
     else:
         raise Exception('Invalid model')
 
@@ -169,9 +157,13 @@ def get_rgg_params(nvertices, avgdegree):
 def plot_graph(g, coordsin, labels, vszs, vcolours, outpath):
     coords = np.array(g.layout(layout='fr')) if coordsin is None else coordsin
 
+    a = 7
+    b = 3
     if vszs != None and type(vszs) != int: # Normalize between 5 and 15
         vszs = (vszs - np.min(vszs))/ (np.max(vszs) - np.min(vszs))
-        vszs = vszs  * 10 + 5
+        vszs = vszs  * a + b
+
+    coords = [(x, -y) for x, y in coords]
 
     visual_style = {}
     visual_style["layout"] = coords
@@ -265,50 +257,57 @@ def plot_dendrogram(means, nclusters, expidstr, outdir):
 ##########################################################
 def run_experiment(top, n, k, runid, coincexp, outdir):
     """Single run"""
-    t = 0.8
-    maxdist = 50 # maxdist = g.diameter() + 1
-
-    isext = top.endswith('.graphml')
-    random.seed(runid); np.random.seed(runid) # Random seed
-
-    gid = os.path.basename(top).replace('.graphml', '') if isext else top
-
-    expidstr = '{}_{:02d}'.format(gid, runid)
-    info(expidstr)
+    # coincthresh = 0.8
+    maxdist = 150 # maxdist = g.diameter() + 1
 
     visdir = pjoin(outdir, 'vis')
     os.makedirs(visdir, exist_ok=True)
-
-    netorig = pjoin(visdir, '{}_grorig.png'.format(expidstr))
-    netcoinc1 = pjoin(visdir, '{}_grcoinc1.png'.format(expidstr))
-    netcoinc2 = pjoin(visdir, '{}_grcoinc2.png'.format(expidstr))
+    isext = top.endswith('.graphml')
+    random.seed(runid); np.random.seed(runid) # Random seed
+    gid = os.path.basename(top).replace('.graphml', '') if isext else top
+    pklpath = pjoin(visdir, '{}_{:02d}.pkl'.format(gid, runid))
 
     g, adj = generate_graph(top, n, k)
-    n = g.vcount()
     info('n:{},k:{:.02f}'.format(n, np.mean(g.degree())))
 
-    vfeats, featlbls = extract_features(adj, g)
-    coinc0 = get_coincidx_values(vfeats, .5, coincexp, False)
-    means, stds = calculate_autorelation(g, coinc0, maxdist)
-    coinc = threshold_values(coinc0, t)
-    plotpath = pjoin(visdir, '{}_autorel.png'.format(expidstr))
-    plot_curves_and_avg(means, '', plotpath)
-
-    gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
-    # coords1 = plot_graph(gcoinc, None, None, g.vs.degree(), None, netcoinc)
-
+    xy = None
     if 'x' in g.vertex_attributes():
         xy = np.array([g.vs['x'], g.vs['y']]).T
+
+    if os.path.isfile(pklpath):
+        coinc0 = pickle.load(open(pklpath, 'rb'))
     else:
-        xy = None
+        vfeats, featlbls = extract_features(adj, g)
+        coinc0 = get_coincidx_values(vfeats, .5, coincexp, False)
+        pickle.dump(coinc0, open(pklpath, 'wb'))
 
-    coords1 = plot_graph(g, xy, None, None, None, netorig)
 
-    coinc1 = get_coincidx_values(means, .5, coincexp, False)
-    coinc = threshold_values(coinc1, t)
-    gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
-    plot_graph(gcoinc, coords1, None, g.vs.degree(), None, netcoinc1)
-    plot_graph(gcoinc, None, None, g.vs.degree(), None, netcoinc2)
+    netorig = pjoin(visdir, '{}_{:02d}.png'.format(gid, runid))
+    coords1 = plot_graph(g, xy, None, 10, None, netorig)
+
+    # plot.plot_graph(g, '/tmp/out/foo.png')
+
+    for coincthresh in np.arange(.2, .91, .1):
+        expidstr = '{}_T{:.01f}_{:02d}'.format(gid, coincthresh, runid)
+        info(expidstr)
+        netcoinc1 = pjoin(visdir, '{}_grcoinc1.png'.format(expidstr))
+        netcoinc2 = pjoin(visdir, '{}_grcoinc2.png'.format(expidstr))
+
+        means, stds = calculate_autorelation(g, coinc0, maxdist)
+        coinc = threshold_values(coinc0.copy(), coincthresh)
+
+        plotpath = pjoin(visdir, '{}_autorel.png'.format(expidstr))
+        plot_curves_and_avg(means, '', plotpath)
+
+        gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
+
+
+
+        coinc1 = get_coincidx_values(means, .5, coincexp, False)
+        coinc = threshold_values(coinc1, coincthresh)
+        gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
+        plot_graph(gcoinc, coords1, None, g.vs.degree(), None, netcoinc1)
+        plot_graph(gcoinc, None, None, g.vs.degree(), None, netcoinc2)
     return np.mean(means, axis=0)
 
 ###########################################################
@@ -372,13 +371,13 @@ def run_group(graphml, tops, nruns, coincexp, nprocs, outdir):
     avgs = np.array(avgs)
 
     # Export averages (black curves)
-    nn, mm = avgs.shape
-    dfres = pd.DataFrame([[x[0], x[3]] for x in argsconcat],
-                         columns=['model', 'runid'])
-    for j in range(mm):
-        dfres['d{:02d}'.format(j+1)] = avgs[:, j]
+    # nn, mm = avgs.shape
+    # dfres = pd.DataFrame([[x[0], x[3]] for x in argsconcat],
+                         # columns=['model', 'runid'])
+    # for j in range(mm):
+        # dfres['d{:02d}'.format(j+1)] = avgs[:, j]
 
-    dfres.to_csv(outpath, index=False, float_format='%.3f')
+    # dfres.to_csv(outpath, index=False, float_format='%.3f')
 
     # coordspca = plot_pca(avgs, tops, graphml, nruns, outdir)
     # np.savetxt(pcapath, coordspca, delimiter=',')
@@ -408,7 +407,7 @@ def main(cfgpath, nprocs, outrootdir):
             graphml = pjoin(d, f)
             outdir = pjoin(outrootdir, fid)
             r = run_group(graphml, tops, nruns, coincexp, nprocs, outdir)
-            avgs['{}_{}'.format(lbl, fid)] = r
+            # avgs['{}_{}'.format(lbl, fid)] = r
 
 ##########################################################
 if __name__ == "__main__":
