@@ -26,7 +26,8 @@ from sklearn.cluster import AgglomerativeClustering
 from scipy.cluster import hierarchy
 import pickle
 
-PALETTE = ['#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00']
+# PALETTE = ['#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00']
+PALETTE = ['blue', 'green', 'red', 'magenta']
 W = 640; H = 480
 
 ##########################################################
@@ -155,7 +156,11 @@ def get_rgg_params(nvertices, avgdegree):
 
 ##########################################################
 def plot_graph(g, coordsin, labels, vszs, vcolours, outpath):
-    coords = g.layout(layout='fr') if coordsin is None else coordsin
+
+    if coordsin:
+        coords = coordsin
+    else:
+        coords = g.layout(layout='fr')
 
     a = 7
     b = 3
@@ -171,7 +176,7 @@ def plot_graph(g, coordsin, labels, vszs, vcolours, outpath):
     # visual_style['vertex_label'] = range(g.vcount())
     visual_style['vertex_color'] = 'blue' if vcolours == None else vcolours
     visual_style['vertex_size'] = vszs
-    visual_style['vertex_frame_width'] = 0
+    # visual_style['vertex_frame_width'] = 0
 
     igraph.plot(g, outpath, **visual_style)
     return coords
@@ -259,7 +264,7 @@ def plot_dendrogram(means, nclusters, expidstr, outdir):
     return vcolours
 
 ##########################################################
-def run_experiment(adj, grps, maxdist, runid, coincexp, outrootdir):
+def run_experiment(adj, coords1, grps, maxdist, runid, coincexp, outrootdir):
     """Single run"""
     info('maxdist:{}, run:{}'.format(maxdist, runid))
     outdir = pjoin(outrootdir, '{:02d}'.format(maxdist))
@@ -267,19 +272,23 @@ def run_experiment(adj, grps, maxdist, runid, coincexp, outrootdir):
     random.seed(runid); np.random.seed(runid) # Random seed
 
     g = igraph.Graph.Adjacency(list(adj))
+    g.to_undirected()
+    g = g.connected_components().giant()
+    g.simplify()
 
     vfeats, featlbls = extract_features(adj, g)
     coinc0 = get_coincidx_values(vfeats, .5, coincexp, False)
 
     netorig = pjoin(outdir, '{}_{:02d}.png'.format(maxdist, runid))
     plotpath = pjoin(outdir, '{}_{:02d}_autorel.png'.format(maxdist, runid))
-    coords1 = plot_graph(g, None, None, 10, None, netorig)
+    vcols = [PALETTE[i] for i in grps]
+    coords1 = plot_graph(g, coords1, None, 10, vcols, netorig)
 
     means, stds = calculate_autorelation(g, coinc0, maxdist)
     plot_curves_and_avg(means, grps, '', plotpath)
 
     # for coincthresh in np.arange(.2, .91, .1):
-    for coincthresh in [.5]:
+    for coincthresh in [.8]:
         expidstr = 'd{}_t{:.01f}_{:02d}'.format(maxdist, coincthresh, runid)
         info(expidstr)
         netcoinc1 = pjoin(outdir, '{}_grcoinc1.png'.format(expidstr))
@@ -372,10 +381,11 @@ def main(nprocs, outdir):
 
     vlabels = ['{:03d}'.format(x) for x in range(n)]
     plotpath1 = pjoin(outdir, 'orig.png')
-    igraph.plot(g, plotpath1, vertex_label=vlabels)
+    coords = g.layout(layout='fr')
+    igraph.plot(g, plotpath1, layout=coords, vertex_label=vlabels)
     maxdist = [5, 10, 20, 50] # maxdist = g.diameter() + 1
 
-    argsconcat = list(product([adj], [grps], maxdist, range(nruns), [coincexp], [outdir]))
+    argsconcat = list(product([adj], [coords], [grps], maxdist, range(nruns), [coincexp], [outdir]))
 
     parallelize(run_experiment, nprocs, argsconcat)
 
