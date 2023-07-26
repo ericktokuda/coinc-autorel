@@ -16,6 +16,7 @@ import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from myutils import info, create_readme, transform, plot
 import igraph
+import networkx as nx
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from itertools import product, combinations
@@ -122,6 +123,16 @@ def generate_graph(model, n, k):
     elif model.endswith('.graphml'):
         g = graph.simplify_graphml(model)
         if 'width' in g.edge_attributes(): del g.es['width']
+    elif model == 'wx':
+        G = nx.waxman_graph(n, beta=0.15, alpha=0.1, L=None, domain=(0, 0, 1, 1), metric=None, seed=None)
+        Gcc = sorted(nx.connected_components(G), key=len, reverse=True)
+        G0 = G.subgraph(Gcc[0])
+        g = G0
+        adj = nx.adjacency_matrix(g)
+        vk = dict(G0.degree())
+        vk = list(vk.values())
+        k = np.mean(vk)
+        g = igraph.Graph.from_networkx(G0)
     else:
         raise Exception('Invalid model')
 
@@ -169,7 +180,7 @@ def plot_graph(g, coordsin, labels, vszs, vcolours, outpath):
     visual_style["layout"] = coords
     visual_style["bbox"] = (1200, 1200)
     visual_style["margin"] = 10
-    # visual_style['vertex_label'] = labels
+    visual_style['vertex_label'] = labels
     # visual_style['vertex_label'] = range(g.vcount())
     visual_style['vertex_color'] = 'blue' if vcolours == None else vcolours
     visual_style['vertex_size'] = vszs
@@ -241,21 +252,8 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
     gid = os.path.basename(top).replace('.graphml', '') if isext else top
     pklpath = pjoin(outdir, '{}_{:02d}.pkl'.format(gid, runid))
 
-    n=200
-    import networkx as nx
-    G = nx.waxman_graph(n, beta=0.15, alpha=0.1, L=None, domain=(0, 0, 1, 1), metric=None, seed=None)
-    Gcc = sorted(nx.connected_components(G), key=len, reverse=True)
-    G0 = G.subgraph(Gcc[0])
-    g = G0
-    adj = nx.adjacency_matrix(g)
-    n = g.number_of_nodes()
-    vk = dict(G0.degree())
-    vk = list(vk.values())
-    k = np.mean(vk)
-    g = igraph.Graph.from_networkx(G0)
-    print(n)
-    print(k)
-    # nx.draw(G0, node_size=15)
+    g, adj = generate_graph(top, n, k)
+    info('n:{},k:{:.02f}'.format(n, np.mean(g.degree())))
 
     xy = None
     if 'x' in g.vertex_attributes():
@@ -278,7 +276,7 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
     plot_curves_and_avg(means, '', plotpath)
     # return
 
-    for coincthresh in np.arange(.2, .91, .05):
+    for coincthresh in np.arange(.2, .91, .1):
         expidstr = '{}_T{:.02f}_{:02d}'.format(gid, coincthresh, runid)
         info(expidstr)
         netcoinc1 = pjoin(outdir, '{}_grcoinc1.png'.format(expidstr))
@@ -341,7 +339,6 @@ def main(cfgpath, nprocs, outrootdir):
             graphml = pjoin(d, f)
             outdir = pjoin(outrootdir, fid)
             run_group(graphml, tops, nruns, coincexp, maxdist, nprocs, outdir)
-            return
 
 ##########################################################
 if __name__ == "__main__":
