@@ -221,17 +221,18 @@ def plot_curves_and_avg(curves, ylbl, plotpath):
     fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
     maxx = curves.shape[1]
     xs = range(1, maxx + 1)
-    for v in range(len(curves)):
-        ys = curves[v, :]
-        ax.plot(xs, ys)
 
-        fig2, ax2 = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
-        ax2.plot(xs, ys)
-        ax2.set_ylim(0, 1)
-        ax2.set_xlabel('Shift')
-        ax2.set_ylabel(ylbl)
-        outpath2 = plotpath.replace('.png', '_{:04d}.png'.format(v))
-        plt.savefig(outpath2); plt.close(fig2)
+    # for v in range(len(curves)): # Plot individual curves
+        # ys = curves[v, :]
+        # ax.plot(xs, ys)
+
+        # fig2, ax2 = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
+        # ax2.plot(xs, ys)
+        # ax2.set_ylim(0, 1)
+        # ax2.set_xlabel('Shift')
+        # ax2.set_ylabel(ylbl)
+        # outpath2 = plotpath.replace('.png', '_{:04d}.png'.format(v))
+        # plt.savefig(outpath2); plt.close(fig2)
     ys = np.mean(curves, axis=0) # Average of the means
     ax.plot(xs, ys, color='k')
     ax.set_ylim(0, 1)
