@@ -440,8 +440,6 @@ def main(cfgpath, nruns, nprocs, outrootdir):
         for f in fs:
             if not f.endswith('_es.tsv'): continue
             fid = f.replace('_es.tsv', '')
-            if not fid in ['Physics', 'Theology']: continue #TODO: remove this
-            # if not fid in ['Physics']: continue #TODO: remove this
             espath = pjoin(d, f)
             outdir = pjoin(outrootdir, lbl, fid)
             r = run_group(espath, tops, nruns, coincexp, nprocs, outdir)

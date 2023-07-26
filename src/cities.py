@@ -163,13 +163,14 @@ def plot_graph(g, coordsin, labels, vszs, vcolours, outpath):
         vszs = (vszs - np.min(vszs))/ (np.max(vszs) - np.min(vszs))
         vszs = vszs  * a + b
 
-    coords = [(x, -y) for x, y in coords]
+    vszs += 3
 
     visual_style = {}
     visual_style["layout"] = coords
-    visual_style["bbox"] = (960, 960)
+    visual_style["bbox"] = (1200, 1200)
     visual_style["margin"] = 10
-    visual_style['vertex_label'] = labels
+    # visual_style['vertex_label'] = labels
+    # visual_style['vertex_label'] = range(g.vcount())
     visual_style['vertex_color'] = 'blue' if vcolours == None else vcolours
     visual_style['vertex_size'] = vszs
     visual_style['vertex_frame_width'] = 0
@@ -212,6 +213,14 @@ def plot_curves_and_avg(curves, ylbl, plotpath):
     for v in range(len(curves)):
         ys = curves[v, :]
         ax.plot(xs, ys)
+
+        fig2, ax2 = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
+        ax2.plot(xs, ys)
+        ax2.set_ylim(0, 1)
+        ax2.set_xlabel('Shift')
+        ax2.set_ylabel(ylbl)
+        outpath2 = plotpath.replace('.png', '_{:04d}.png'.format(v))
+        plt.savefig(outpath2); plt.close(fig2)
     ys = np.mean(curves, axis=0) # Average of the means
     ax.plot(xs, ys, color='k')
     ax.set_ylim(0, 1)
@@ -220,59 +229,38 @@ def plot_curves_and_avg(curves, ylbl, plotpath):
     plt.savefig(plotpath); plt.close()
 
 ##########################################################
-def plot_dendrogram(means, nclusters, expidstr, outdir):
-    z = hierarchy.ward(means)
-    grps = hierarchy.cut_tree(z, n_clusters=nclusters).flatten()
-    uids, counts = np.unique(grps, return_counts=True)
-    sortedid = np.argsort(counts)
-
-    colleav = np.array(['#ABB2B9'] * len(grps))
-    for i, id in enumerate(sortedid[::-1]):
-        inds = np.where(grps == id)[0]
-        colleav[inds] = PALETTE[i]
-
-    nlinks = len(z)
-    collnks = {}
-
-    for i in range(nlinks):
-        clid1, clid2 = np.array(z[i, :2]).astype(int)
-        c1 = colleav[clid1] if clid1 <= nlinks else collnks[clid1]
-        c2 = colleav[clid2] if clid2 <= nlinks else collnks[clid2]
-        collnks[nlinks+i+1] = c1 if c1 == c2 else 'blue'
-
-    def colfunc(id): return collnks[id]
-
-    fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
-    dendr = hierarchy.dendrogram(z, link_color_func=colfunc, ax=ax)
-    aux = dendr['leaves']
-    lcolours = np.array(dendr['leaves_color_list'])
-    plt.savefig(pjoin(outdir, '{}_dendr.png'.format(expidstr))); plt.close()
-
-    vcolours = []
-    for i in range(len(means)):
-        vcolours.append(lcolours[aux.index(i)])
-
-    return vcolours
-
-##########################################################
-def run_experiment(top, n, k, runid, coincexp, outdir):
+def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
     """Single run"""
-    # coincthresh = 0.8
-    maxdist = 150 # maxdist = g.diameter() + 1
+    info('{} n:{},k:{:.02f}'.format(top, n, k))
 
-    visdir = pjoin(outdir, 'vis')
-    os.makedirs(visdir, exist_ok=True)
+    outdir = pjoin(outrootdir, '{:03d}'.format(maxdist))
+    os.makedirs(outdir, exist_ok=True)
     isext = top.endswith('.graphml')
+    runid += 1
     random.seed(runid); np.random.seed(runid) # Random seed
     gid = os.path.basename(top).replace('.graphml', '') if isext else top
-    pklpath = pjoin(visdir, '{}_{:02d}.pkl'.format(gid, runid))
+    pklpath = pjoin(outdir, '{}_{:02d}.pkl'.format(gid, runid))
 
-    g, adj = generate_graph(top, n, k)
-    info('n:{},k:{:.02f}'.format(n, np.mean(g.degree())))
+    n=200
+    import networkx as nx
+    G = nx.waxman_graph(n, beta=0.15, alpha=0.1, L=None, domain=(0, 0, 1, 1), metric=None, seed=None)
+    Gcc = sorted(nx.connected_components(G), key=len, reverse=True)
+    G0 = G.subgraph(Gcc[0])
+    g = G0
+    adj = nx.adjacency_matrix(g)
+    n = g.number_of_nodes()
+    vk = dict(G0.degree())
+    vk = list(vk.values())
+    k = np.mean(vk)
+    g = igraph.Graph.from_networkx(G0)
+    print(n)
+    print(k)
+    # nx.draw(G0, node_size=15)
 
     xy = None
     if 'x' in g.vertex_attributes():
         xy = np.array([g.vs['x'], g.vs['y']]).T
+        xy = [[x, -y] for x, y in xy]
 
     if os.path.isfile(pklpath):
         coinc0 = pickle.load(open(pklpath, 'rb'))
@@ -281,60 +269,28 @@ def run_experiment(top, n, k, runid, coincexp, outdir):
         coinc0 = get_coincidx_values(vfeats, .5, coincexp, False)
         pickle.dump(coinc0, open(pklpath, 'wb'))
 
-
-    netorig = pjoin(visdir, '{}_{:02d}.png'.format(gid, runid))
+    netorig = pjoin(outdir, '{}_{:02d}.pdf'.format(gid, runid))
+    plotpath = pjoin(outdir, '{}_{:02d}_autorel.png'.format(gid, runid))
     coords1 = plot_graph(g, xy, None, 10, None, netorig)
 
     # plot.plot_graph(g, '/tmp/out/foo.png')
+    means, stds = calculate_autorelation(g, coinc0, maxdist)
+    plot_curves_and_avg(means, '', plotpath)
+    # return
 
-    for coincthresh in np.arange(.2, .91, .1):
-        expidstr = '{}_T{:.01f}_{:02d}'.format(gid, coincthresh, runid)
+    for coincthresh in np.arange(.2, .91, .05):
+        expidstr = '{}_T{:.02f}_{:02d}'.format(gid, coincthresh, runid)
         info(expidstr)
-        netcoinc1 = pjoin(visdir, '{}_grcoinc1.png'.format(expidstr))
-        netcoinc2 = pjoin(visdir, '{}_grcoinc2.png'.format(expidstr))
+        netcoinc1 = pjoin(outdir, '{}_grcoinc1.png'.format(expidstr))
+        netcoinc2 = pjoin(outdir, '{}_grcoinc2.png'.format(expidstr))
 
-        means, stds = calculate_autorelation(g, coinc0, maxdist)
         coinc = threshold_values(coinc0.copy(), coincthresh)
-
-        plotpath = pjoin(visdir, '{}_autorel.png'.format(expidstr))
-        plot_curves_and_avg(means, '', plotpath)
-
         gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
-
-
-
         coinc1 = get_coincidx_values(means, .5, coincexp, False)
         coinc = threshold_values(coinc1, coincthresh)
         gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
         plot_graph(gcoinc, coords1, None, g.vs.degree(), None, netcoinc1)
         plot_graph(gcoinc, None, None, g.vs.degree(), None, netcoinc2)
-    return np.mean(means, axis=0)
-
-###########################################################
-def plot_pca(data, models, refmodel, nruns, outdir):
-    data = np.diff(data, axis=1) # Notice this line!
-    a, evecs, evals = transform.pca(data, normalize=True)
-
-    # pcs, contribs = transform.get_pc_contribution(evecs)
-    coords = np.column_stack([a[:, 0], a[:, 1]]).real
-
-    fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
-
-    lbl = os.path.basename(refmodel).replace('_es.tsv', '')
-    ax.scatter(coords[0, 0], coords[0, 1], label=lbl, c=PALETTE[0])
-
-    coords = coords[1:, :]
-    for topid in range(len(models)):
-        i0 = topid * nruns
-        i1 = (topid + 1) * nruns
-        ax.scatter(coords[i0:i1, 0], coords[i0:i1, 1],
-                   label=models[topid], c=PALETTE[topid+1])
-
-    plt.legend(loc='center left', bbox_to_anchor=(1, .5))
-    plt.tight_layout(rect=[0, 0, 0.95, 1])
-    outpath = pjoin(outdir, 'pca.png')
-    plt.savefig(outpath); plt.close()
-    return coords
 
 ##########################################################
 def export_params(tops, n, k, espath, coincexp, nruns, outdir):
@@ -345,44 +301,22 @@ def export_params(tops, n, k, espath, coincexp, nruns, outdir):
     json.dump(p, open(outpath, 'w'))
 
 ##########################################################
-def run_group(graphml, tops, nruns, coincexp, nprocs, outdir):
+def run_group(graphml, tops, nruns, coincexp, maxdist, nprocs, outdir):
     """Spawl jobs"""
-    outpath = pjoin(outdir, 'res.csv')
-    pcapath = pjoin(outdir, 'pca.csv')
-
-    if os.path.isfile(pcapath):
-        return np.loadtxt(pcapath, delimiter=',')
-
-    os.makedirs(outdir, exist_ok=True)
-
     # Get the n,m,k from the reference network
     g, adj = generate_graph(graphml, 0, 0) # connected and undirected
     n, m = [g.vcount()], [g.ecount()]
     k = [m[0] / n[0] * 2]
+    os.makedirs(outdir, exist_ok=True)
 
     export_params(tops, n[0], k[0], graphml, coincexp, nruns, outdir)
 
     runids = range(nruns)
-    args1 = [[graphml, 0, 0, 0, coincexp, outdir]]
-    args2 = list(product(tops, n, k, runids, [coincexp], [outdir]))
+    args1 = [[graphml, 0, 0, 0, coincexp, d, outdir] for d in maxdist]
+    args2 = list(product(tops, n, k, runids, [coincexp], maxdist, [outdir]))
     argsconcat = args1 + args2
 
-    avgs = parallelize(run_experiment, nprocs, argsconcat)
-    avgs = np.array(avgs)
-
-    # Export averages (black curves)
-    # nn, mm = avgs.shape
-    # dfres = pd.DataFrame([[x[0], x[3]] for x in argsconcat],
-                         # columns=['model', 'runid'])
-    # for j in range(mm):
-        # dfres['d{:02d}'.format(j+1)] = avgs[:, j]
-
-    # dfres.to_csv(outpath, index=False, float_format='%.3f')
-
-    # coordspca = plot_pca(avgs, tops, graphml, nruns, outdir)
-    # np.savetxt(pcapath, coordspca, delimiter=',')
-    plot_pca(avgs, tops, graphml, nruns, outdir)
-    return avgs
+    parallelize(run_experiment, nprocs, argsconcat)
 
 ##########################################################
 def main(cfgpath, nprocs, outrootdir):
@@ -390,12 +324,12 @@ def main(cfgpath, nprocs, outrootdir):
 
     cfg = json.load(open(cfgpath))
 
-    # tops = ['ba', 'er', 'ws']
-    tops = ['er']
+    tops = []
     coincexp = cfg['coincexp'][0]
     netdirs = cfg['netdirs']
     labels = cfg['labels']
     nruns = cfg['nruns'][0]
+    maxdist = cfg['maxdist']
 
     avgs = {}
     nets, ns, ks = [], [], []
@@ -406,8 +340,8 @@ def main(cfgpath, nprocs, outrootdir):
             fid = f.replace('.graphml', '')
             graphml = pjoin(d, f)
             outdir = pjoin(outrootdir, fid)
-            r = run_group(graphml, tops, nruns, coincexp, nprocs, outdir)
-            # avgs['{}_{}'.format(lbl, fid)] = r
+            run_group(graphml, tops, nruns, coincexp, maxdist, nprocs, outdir)
+            return
 
 ##########################################################
 if __name__ == "__main__":
