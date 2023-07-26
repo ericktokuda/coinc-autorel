@@ -208,7 +208,7 @@ def calculate_autorelation(g, coinc, maxdist):
     for v in range(n):
         dists = np.array(g.distances(source=v, mode='all')[0])
         dists[v] = 9999999 # In a simple graph, there's no self-loop
-        for l in range(1, maxdist):
+        for l in range(1, maxdist + 1):
             neighs = np.where(dists == l)[0]
             if len(neighs) == 0: continue
             aux = coinc[v, neighs]
@@ -253,7 +253,7 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
     pklpath = pjoin(outdir, '{}_{:02d}.pkl'.format(gid, runid))
 
     g, adj = generate_graph(top, n, k)
-    info('n:{},k:{:.02f}'.format(n, np.mean(g.degree())))
+    info('n:{},k:{:.02f}'.format(g.vcount(), np.mean(g.degree())))
 
     xy = None
     if 'x' in g.vertex_attributes():
@@ -271,12 +271,10 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
     plotpath = pjoin(outdir, '{}_{:02d}_autorel.png'.format(gid, runid))
     coords1 = plot_graph(g, xy, None, 10, None, netorig)
 
-    # plot.plot_graph(g, '/tmp/out/foo.png')
     means, stds = calculate_autorelation(g, coinc0, maxdist)
     plot_curves_and_avg(means, '', plotpath)
-    # return
 
-    for coincthresh in np.arange(.2, .91, .1):
+    for coincthresh in np.arange(.5, .99, .02):
         expidstr = '{}_T{:.02f}_{:02d}'.format(gid, coincthresh, runid)
         info(expidstr)
         netcoinc1 = pjoin(outdir, '{}_grcoinc1.png'.format(expidstr))
