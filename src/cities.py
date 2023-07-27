@@ -218,6 +218,8 @@ def calculate_autorelation(g, coinc, maxdist):
 ##########################################################
 def plot_curves_and_avg(curves, ylbl, plotpath):
     """Plot the autorelation curves (one for each vertex)"""
+    if isfile(plotpath): return
+
     fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
     maxx = curves.shape[1]
     xs = range(1, maxx + 1)
@@ -261,7 +263,7 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
         xy = np.array([g.vs['x'], g.vs['y']]).T
         xy = [[x, -y] for x, y in xy]
 
-    if os.path.isfile(pklpath):
+    if isfile(pklpath):
         coinc0 = pickle.load(open(pklpath, 'rb'))
     else:
         vfeats, featlbls = extract_features(adj, g)
@@ -280,6 +282,7 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
         info(expidstr)
         netcoinc1 = pjoin(outdir, '{}_grcoinc1.png'.format(expidstr))
         netcoinc2 = pjoin(outdir, '{}_grcoinc2.png'.format(expidstr))
+        if isfile(netcoinc1) and isfile(netcoinc2): continue
 
         coinc = threshold_values(coinc0.copy(), coincthresh)
         gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
