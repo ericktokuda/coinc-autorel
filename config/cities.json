@@ -1,6 +1,7 @@
 {
-	"netdirs": ["/home/posmac/keiji/temp/citiessample/"],
+	"netdirs": ["/var/tmp/ekt248fg6h4jh8m90d8bn6d/citiessample/"],
 	"labels": ["cities"],
-	"coincexp": [1],
+	"coincexp": [3],
+	"maxdist": [4,8,12],
 	"nruns": [1]
 }

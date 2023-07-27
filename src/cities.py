@@ -222,9 +222,9 @@ def plot_curves_and_avg(curves, ylbl, plotpath):
     maxx = curves.shape[1]
     xs = range(1, maxx + 1)
 
-    # for v in range(len(curves)): # Plot individual curves
-        # ys = curves[v, :]
-        # ax.plot(xs, ys)
+    for v in range(len(curves)): # Plot individual curves
+        ys = curves[v, :]
+        ax.plot(xs, ys)
 
         # fig2, ax2 = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
         # ax2.plot(xs, ys)
