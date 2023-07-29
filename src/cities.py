@@ -14,6 +14,7 @@ import numpy as np
 import scipy; import scipy.optimize
 import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import myutils
 from myutils import info, create_readme, transform, plot
 import igraph
 import networkx as nx
@@ -84,8 +85,14 @@ def extract_simple_feats_all(adj, g):
     # info(inspect.stack()[0][3] + '()')
     labels = 'dg cl'.split(' ')
     feats = []
-    cl = np.array(g.degree()) # np.array(np.sum(adj, axis=0)).flatten()
-    deg = np.array(g.degree()) # np.array(np.sum(adj, axis=0)).flatten()
+    cl = np.array(g.degree()) # Calculating twice the degree instead
+    deg = np.array(g.degree())
+
+    # accpath = '/home/dufresne/temp/20230728-accessibs/0671806_Sierra_Madre_undirected_acc05.txt'
+    # trans = calculate_trans_feats(g) # Clustering coefficient
+    # bet = g.betweenness() # Betweenness centrality
+    # accessib = calculate_accessib_feats(accpath) # Accessibility
+
     feats = np.vstack((deg, cl)).T
     return feats, labels
 
@@ -144,7 +151,26 @@ def generate_graph(model, n, k):
     return g, g.get_adjacency_sparse()
 
 ##########################################################
+def calculate_trans_feats(g):
+    """Calculate clustering coefficient entropy """
+    info(inspect.stack()[0][3] + '()')
+    clucoeffs = np.array(g.as_undirected().transitivity_local_undirected())
+
+    # TODO: define what do when it is invalid
+    # valid = np.argwhere(~np.isnan(clucoeffs)).flatten()
+    # clucoeffs = clucoeffs[valid]
+    return clucoeffs
+
+##########################################################
+def calculate_accessib_feats(accpath):
+    """Calculate accessibility features"""
+    info(inspect.stack()[0][3] + '()')
+    accs = np.loadtxt(accpath)
+    return accs
+
+##########################################################
 def extract_features(adj, g):
+    info(inspect.stack()[0][3] + '()')
     vfeats, labels = extract_simple_feats_all(adj,  g)
     return np.array(vfeats), labels
 
@@ -301,10 +327,13 @@ def export_params(tops, n, k, espath, coincexp, nruns, outdir):
     json.dump(p, open(outpath, 'w'))
 
 ##########################################################
-def run_group(graphml, tops, nruns, coincexp, maxdist, nprocs, outdir):
+def run_group(graphml, tops, nruns, coincexp, maxdist, nprocs, readmepath, outdir):
     """Spawl jobs"""
     # Get the n,m,k from the reference network
     g, adj = generate_graph(graphml, 0, 0) # connected and undirected
+    ginfo = '{}\tnv:{}\tne:{}'.format(os.path.basename(graphml), g.vcount(),
+            g.ecount())
+    myutils.append_to_file(readmepath, ginfo)
     n, m = [g.vcount()], [g.ecount()]
     k = [m[0] / n[0] * 2]
     os.makedirs(outdir, exist_ok=True)
@@ -319,7 +348,7 @@ def run_group(graphml, tops, nruns, coincexp, maxdist, nprocs, outdir):
     parallelize(run_experiment, nprocs, argsconcat)
 
 ##########################################################
-def main(cfgpath, nprocs, outrootdir):
+def main(cfgpath, nprocs, readmepath, outrootdir):
     info(inspect.stack()[0][3] + '()')
 
     cfg = json.load(open(cfgpath))
@@ -340,7 +369,8 @@ def main(cfgpath, nprocs, outrootdir):
             fid = f.replace('.graphml', '')
             graphml = pjoin(d, f)
             outdir = pjoin(outrootdir, fid)
-            run_group(graphml, tops, nruns, coincexp, maxdist, nprocs, outdir)
+            run_group(graphml, tops, nruns, coincexp, maxdist, nprocs,
+                    readmepath, outdir)
 
 ##########################################################
 if __name__ == "__main__":
@@ -355,6 +385,6 @@ if __name__ == "__main__":
     os.makedirs(args.outdir, exist_ok=True)
     readmepath = create_readme(sys.argv, args.outdir)
     shutil.copy(args.config, args.outdir)
-    main(args.config, args.nprocs, args.outdir)
+    main(args.config, args.nprocs, readmepath, args.outdir)
     info('Elapsed time:{:.02f}s'.format(time.time()-t0))
     info('Output generated in {}'.format(args.outdir))
