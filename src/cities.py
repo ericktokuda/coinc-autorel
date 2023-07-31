@@ -274,7 +274,11 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
     info('{} n:{},k:{:.02f}'.format(top, n, k))
 
     outdir = pjoin(outrootdir, '{:03d}'.format(maxdist))
-    os.makedirs(outdir, exist_ok=True)
+    dirlayout1 = pjoin(outdir, 'layout1')
+    dirlayout2 = pjoin(outdir, 'layout2')
+    os.makedirs(dirlayout1, exist_ok=True)
+    os.makedirs(dirlayout2, exist_ok=True)
+
     isext = top.endswith('.graphml')
     runid += 1
     random.seed(runid); np.random.seed(runid) # Random seed
@@ -306,8 +310,8 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
     for coincthresh in np.arange(.5, .99, .02):
         expidstr = '{}_T{:.02f}_{:02d}'.format(gid, coincthresh, runid)
         info(expidstr)
-        netcoinc1 = pjoin(outdir, '{}_grcoinc1.png'.format(expidstr))
-        netcoinc2 = pjoin(outdir, '{}_grcoinc2.png'.format(expidstr))
+        netcoinc1 = pjoin(dirlayout1, '{}_grcoinc1.png'.format(expidstr))
+        netcoinc2 = pjoin(dirlayout2, '{}_grcoinc2.png'.format(expidstr))
         if isfile(netcoinc1) and isfile(netcoinc2): continue
 
         coinc = threshold_values(coinc0.copy(), coincthresh)
