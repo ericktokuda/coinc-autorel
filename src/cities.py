@@ -65,7 +65,7 @@ def coincidence(data, a, D):
 ##########################################################
 def get_coincidx_values(dataorig, alpha, coincexp, standardize):
     """Get coincidence value between each combination in @dataorig"""
-    # info(inspect.stack()[0][3] + '()')
+    info(inspect.stack()[0][3] + '()')
     n, m = dataorig.shape
     if standardize:
         data = StandardScaler().fit_transform(dataorig)
@@ -227,6 +227,7 @@ def threshold_values(coinc, thresh, newval=0):
 
 ##########################################################
 def calculate_autorelation(g, coinc, maxdist):
+    info(inspect.stack()[0][3] + '()')
     # For each vx, calculate autorelation across neighbours
     n = g.vcount()
     means = np.zeros((n, maxdist), dtype=float)
@@ -276,8 +277,10 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
     outdir = pjoin(outrootdir, '{:03d}'.format(maxdist))
     dirlayout1 = pjoin(outdir, 'layout1')
     dirlayout2 = pjoin(outdir, 'layout2')
+    dirlayout3 = pjoin(outdir, 'layout3')
     os.makedirs(dirlayout1, exist_ok=True)
     os.makedirs(dirlayout2, exist_ok=True)
+    os.makedirs(dirlayout3, exist_ok=True)
 
     isext = top.endswith('.graphml')
     runid += 1
@@ -310,8 +313,9 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
     for coincthresh in np.arange(.5, .99, .02):
         expidstr = '{}_T{:.02f}_{:02d}'.format(gid, coincthresh, runid)
         info(expidstr)
-        netcoinc1 = pjoin(dirlayout1, '{}_grcoinc1.png'.format(expidstr))
-        netcoinc2 = pjoin(dirlayout2, '{}_grcoinc2.png'.format(expidstr))
+        netcoinc1 = pjoin(dirlayout1, '{}.png'.format(expidstr))
+        netcoinc2 = pjoin(dirlayout2, '{}.png'.format(expidstr))
+        netcoinc3 = pjoin(dirlayout3, '{}.png'.format(expidstr))
         if isfile(netcoinc1) and isfile(netcoinc2): continue
 
         coinc = threshold_values(coinc0.copy(), coincthresh)
@@ -321,6 +325,8 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
         gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
         plot_graph(gcoinc, coords1, None, g.vs.degree(), None, netcoinc1)
         plot_graph(gcoinc, None, None, g.vs.degree(), None, netcoinc2)
+        giant = gcoinc.components().giant()
+        plot_graph(giant, None, None, giant.vs.degree(), None, netcoinc3)
 
 ##########################################################
 def export_params(tops, n, k, espath, coincexp, nruns, outdir):
@@ -375,6 +381,7 @@ def main(cfgpath, nprocs, readmepath, outrootdir):
             outdir = pjoin(outrootdir, fid)
             run_group(graphml, tops, nruns, coincexp, maxdist, nprocs,
                     readmepath, outdir)
+            return # TODO: remove this
 
 ##########################################################
 if __name__ == "__main__":
