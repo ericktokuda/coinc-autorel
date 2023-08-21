@@ -306,8 +306,11 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
         pickle.dump(coinc0, open(pklpath, 'wb'))
 
     netorig = pjoin(outdir, '{}_{:02d}.pdf'.format(gid, runid))
+    netorig2 = pjoin(outdir, '{}_{:02d}_ids.pdf'.format(gid, runid))
     plotpath = pjoin(outdir, '{}_{:02d}_autorel.png'.format(gid, runid))
+    
     coords1 = plot_graph(g, xy, None, 10, None, netorig)
+    _ = plot_graph(g, xy, [str(t) for t in g.vs['origid']], 10, None, netorig2)
 
     means, stds = calculate_autorelation(g, coinc0, maxdist)
     plot_curves_and_avg(means, '', plotpath)
@@ -325,10 +328,12 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
         coinc1 = get_coincidx_values(means, .5, coincexp, False)
         coinc = threshold_values(coinc1, coincthresh)
         gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
+        gcoinc.vs['origid'] = g.vs['origid']
         plot_graph(gcoinc, coords1, None, g.vs.degree(), None, netcoinc1)
         plot_graph(gcoinc, None, None, g.vs.degree(), None, netcoinc2)
         giant = gcoinc.components().giant()
-        plot_graph(giant, None, None, giant.vs.degree(), None, netcoinc3)
+        lbls = [str(id) for id in giant.vs['origid']]
+        plot_graph(giant, None, lbls, giant.vs.degree(), None, netcoinc3)
 
 ##########################################################
 def export_params(tops, n, k, espath, coincexp, nruns, outdir):
