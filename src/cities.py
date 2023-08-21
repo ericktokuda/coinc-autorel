@@ -274,6 +274,8 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
     """Single run"""
     info('{} n:{},k:{:.02f}'.format(top, n, k))
 
+    # print(top)
+    # if not 'Camarillo' in top: return
     outdir = pjoin(outrootdir, '{:03d}'.format(maxdist))
     dirlayout1 = pjoin(outdir, 'layout1')
     dirlayout2 = pjoin(outdir, 'layout2')
@@ -373,6 +375,7 @@ def main(cfgpath, nprocs, readmepath, outrootdir):
     avgs = {}
     nets, ns, ks = [], [], []
     for d, lbl in zip(netdirs, labels):
+        # fs = reversed(os.listdir(d)) # TODO: REMOVE THIS
         fs = os.listdir(d)
         for f in fs:
             if not f.endswith('.graphml'): continue
@@ -381,7 +384,6 @@ def main(cfgpath, nprocs, readmepath, outrootdir):
             outdir = pjoin(outrootdir, fid)
             run_group(graphml, tops, nruns, coincexp, maxdist, nprocs,
                     readmepath, outdir)
-            return # TODO: remove this
 
 ##########################################################
 if __name__ == "__main__":
