@@ -28,7 +28,8 @@ from sklearn.cluster import AgglomerativeClustering
 from scipy.cluster import hierarchy
 import pickle
 
-PALETTE = ['#4daf4a', '#e41a1c', '#ff7f00', '#984ea3', '#ffff33', '#a65628', '#377eb8']
+# PALETTE = ['#4daf4a', '#e41a1c', '#ff7f00', '#984ea3', '#ffff133', '#a65628', '#377eb8']
+PALETTE = ['#FF0000','#0000FF','#00FF00','#8e00a3','#ff7f00','#ffff33','#a65628','#f70082']
 W = 640; H = 480
 
 ##########################################################
@@ -204,13 +205,13 @@ def plot_graph(g, coordsin, labels, vszs, vcolours, outpath):
 
     visual_style = {}
     visual_style["layout"] = coords
-    visual_style["bbox"] = (1200, 1200)
+    visual_style["bbox"] = (600, 600)
     visual_style["margin"] = 10
     visual_style['vertex_label'] = labels
     # visual_style['vertex_label'] = range(g.vcount())
     visual_style['vertex_color'] = 'blue' if vcolours == None else vcolours
     visual_style['vertex_size'] = vszs
-    visual_style['vertex_frame_width'] = 0
+    visual_style['vertex_frame_width'] = 1
 
     # widths = np.array(g.es['weight'])
     # widths[widths < 0] = 0
@@ -274,7 +275,6 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
     """Single run"""
     info('{} n:{},k:{:.02f}'.format(top, n, k))
 
-    # print(top)
     # if not 'Camarillo' in top: return
     outdir = pjoin(outrootdir, '{:03d}'.format(maxdist))
     dirlayout1 = pjoin(outdir, 'layout1')
@@ -306,16 +306,16 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
         pickle.dump(coinc0, open(pklpath, 'wb'))
 
     netorig = pjoin(outdir, '{}_{:02d}.pdf'.format(gid, runid))
-    netorig2 = pjoin(outdir, '{}_{:02d}_ids.pdf'.format(gid, runid))
+    # netorig2 = pjoin(outdir, '{}_{:02d}_ids.pdf'.format(gid, runid))
     plotpath = pjoin(outdir, '{}_{:02d}_autorel.png'.format(gid, runid))
     
     coords1 = plot_graph(g, xy, None, 10, None, netorig)
-    _ = plot_graph(g, xy, [str(t) for t in g.vs['origid']], 10, None, netorig2)
 
     means, stds = calculate_autorelation(g, coinc0, maxdist)
     plot_curves_and_avg(means, '', plotpath)
 
     for coincthresh in np.arange(.5, .99, .02):
+    # for coincthresh in np.arange(.5, .99, .05): # TODO: REMOVE THIS
         expidstr = '{}_T{:.02f}_{:02d}'.format(gid, coincthresh, runid)
         info(expidstr)
         netcoinc1 = pjoin(dirlayout1, '{}.png'.format(expidstr))
@@ -329,11 +329,32 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
         coinc = threshold_values(coinc1, coincthresh)
         gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
         gcoinc.vs['origid'] = g.vs['origid']
-        plot_graph(gcoinc, coords1, None, g.vs.degree(), None, netcoinc1)
         plot_graph(gcoinc, None, None, g.vs.degree(), None, netcoinc2)
         giant = gcoinc.components().giant()
         lbls = [str(id) for id in giant.vs['origid']]
-        plot_graph(giant, None, lbls, giant.vs.degree(), None, netcoinc3)
+
+        origids = list(giant.vs['origid'])
+        comm = giant.community_label_propagation()
+        membs = comm.membership
+        defclr1 = '#FFFFFF'
+        defclr2 = '#BBBBBB'
+
+        vcols = []
+        for i in range(g.vcount()):
+            if not (i in origids): vcol = defclr1
+            else:
+                memb = membs[origids.index(i)]
+                if memb >= len(PALETTE):
+                    vcol = defclr2
+                else:
+                    vcol = PALETTE[membs[origids.index(i)]]
+            vcols.append(vcol)
+
+        plot_graph(giant, None, None, giant.vs.degree(),
+                np.array(vcols)[giant.vs['origid']].tolist(),
+                netcoinc3)
+
+        plot_graph(g, coords1, None, 10, vcols, netcoinc1)
 
 ##########################################################
 def export_params(tops, n, k, espath, coincexp, nruns, outdir):
