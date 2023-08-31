@@ -205,7 +205,7 @@ def plot_graph(g, coordsin, labels, vszs, vcolours, outpath):
 
     visual_style = {}
     visual_style["layout"] = coords
-    visual_style["bbox"] = (600, 600)
+    visual_style["bbox"] = (800, 800)
     visual_style["margin"] = 10
     visual_style['vertex_label'] = labels
     # visual_style['vertex_label'] = range(g.vcount())
@@ -271,18 +271,53 @@ def plot_curves_and_avg(curves, ylbl, plotpath):
     plt.savefig(plotpath); plt.close()
 
 ##########################################################
+def plot_curves_and_avg_comm(curves, ylbl, vcols, lbl, outdir):
+    """Plot the autorelation curves (one for each vertex)"""
+    maxx = curves.shape[1]
+    xs = range(1, maxx + 1)
+
+    vcolsuniq = np.unique(vcols)
+    figs, axs, yss = {}, {}, {}
+    for col in vcolsuniq:
+        fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
+        figs[col] = fig
+        axs[col] = ax
+        yss[col] = []
+
+    for v in range(len(curves)): # Plot individual curves
+        ys = curves[v, :]
+        axs[vcols[v]].plot(xs, ys, color=vcols[v])
+        yss[vcols[v]].append(ys)
+
+    for i, col in enumerate(vcolsuniq):
+        ax = axs[col]
+        fig = figs[col]
+
+        z = np.mean(yss[col], axis=0)
+        ax.plot(xs, z, color='k')
+
+        ax.set_ylim(0, 1.1)
+        ax.set_xlabel('Shift')
+        ax.set_ylabel(ylbl)
+        plotpath = pjoin(outdir, '{}_comm{}.png'.format(lbl, i))
+        fig.savefig(plotpath)
+
+    plt.close()
+
+##########################################################
 def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
     """Single run"""
     info('{} n:{},k:{:.02f}'.format(top, n, k))
 
-    # if not 'Camarillo' in top: return
     outdir = pjoin(outrootdir, '{:03d}'.format(maxdist))
     dirlayout1 = pjoin(outdir, 'layout1')
     dirlayout2 = pjoin(outdir, 'layout2')
     dirlayout3 = pjoin(outdir, 'layout3')
+    dirsign = pjoin(outdir, 'signatures')
     os.makedirs(dirlayout1, exist_ok=True)
     os.makedirs(dirlayout2, exist_ok=True)
     os.makedirs(dirlayout3, exist_ok=True)
+    os.makedirs(dirsign, exist_ok=True)
 
     isext = top.endswith('.graphml')
     runid += 1
@@ -308,14 +343,16 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
     netorig = pjoin(outdir, '{}_{:02d}.pdf'.format(gid, runid))
     # netorig2 = pjoin(outdir, '{}_{:02d}_ids.pdf'.format(gid, runid))
     plotpath = pjoin(outdir, '{}_{:02d}_autorel.png'.format(gid, runid))
-    
-    coords1 = plot_graph(g, xy, None, 10, None, netorig)
+    lbl = '{}_{:02d}'.format(gid, runid)
+
+    vsz = 7
+    coords1 = plot_graph(g, xy, None, vsz, None, netorig)
 
     means, stds = calculate_autorelation(g, coinc0, maxdist)
     plot_curves_and_avg(means, '', plotpath)
 
     for coincthresh in np.arange(.5, .99, .02):
-    # for coincthresh in np.arange(.5, .99, .05): # TODO: REMOVE THIS
+    # for coincthresh in [.78]: # TODO: REMOVE THIS
         expidstr = '{}_T{:.02f}_{:02d}'.format(gid, coincthresh, runid)
         info(expidstr)
         netcoinc1 = pjoin(dirlayout1, '{}.png'.format(expidstr))
@@ -354,7 +391,8 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
                 np.array(vcols)[giant.vs['origid']].tolist(),
                 netcoinc3)
 
-        plot_graph(g, coords1, None, 10, vcols, netcoinc1)
+        plot_graph(g, coords1, None, vsz, vcols, netcoinc1)
+        plot_curves_and_avg_comm(means, '', vcols, expidstr, dirsign)
 
 ##########################################################
 def export_params(tops, n, k, espath, coincexp, nruns, outdir):
