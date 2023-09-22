@@ -13,6 +13,7 @@ import numpy as np
 import scipy; import scipy.optimize
 import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.collections as mc
 from myutils import info, create_readme, transform, parallelize
 import igraph
 import pandas as pd
@@ -157,14 +158,96 @@ def plot_graph(g, dfref, diffsums, lbl, outdir):
     vcols = 'blue'
     igraph.plot(g, plotpath, vertex_size=vszs, vertex_color=vcols)
 
-##########################################################
-def plot_networks(gs, es1, dfref, diffsums, labels, outdir):
+#############################################################
+def plot_graph_coords(edge0, vcoords, ecoords, ax, shppath, vszs, vclr, inverty=False):
+    """Plot the grpah, with vertices colored by accessibility."""
 
-    vclr = ['royalblue'] * gs[0].vcount()
-    for v0, v1 in es1:
-        vclr[v0] = vclr[v1] = 'red'
-    # vszs = (diffsums - np.min(diffsums)) / (np.max(diffsums) - np.min(diffsums))
-    # vszs = (vszs * 25) + 5
+    if not ax: fig, ax = plt.subplots(figsize=(6, 6))
+
+    if inverty: ax.invert_yaxis()
+
+    center = np.mean(vcoords, axis=0)
+    # _ = ax.scatter(center[0], center[1], c='red',
+            # linewidths=0, alpha=.8, s=10, zorder=10) # center
+
+    from matplotlib.patches import Circle
+    radius = 3
+
+    idsall = set(range(vcoords.shape[0]))
+    idscore = []
+    from scipy.spatial.distance import euclidean
+    # Identify core-border
+    for i, p in enumerate(vcoords):
+        if euclidean(p, center) < radius:
+            idscore.append(i)
+
+    idsborder = np.array(list(idsall.difference(set(idscore))))
+    
+    for id in idscore:
+        vclr[id] = 'lime'
+
+    sc = ax.scatter(vcoords[:, 0], vcoords[:, 1],
+            c=vclr, linewidths=1, edgecolors='k', alpha=1, s=vszs*13, zorder=10) # vertices
+
+    for v in edge0:
+        sc = ax.scatter(vcoords[v, 0], vcoords[v, 1],
+                c=vclr[v], linewidths=2, edgecolors='k', alpha=.75,
+                s=vszs[v]*14, zorder=10) # vertices
+
+
+    segs = mc.LineCollection(ecoords, colors='dimgray', linewidths=.7, alpha=.9) # edges
+    ax.add_collection(segs)
+
+    # for v in edge0:
+        # ax.annotate(str(v), vcoords[v, :], fontsize=8,
+        # ax.annotate(str(v), vcoords[v, :], fontsize=8, color='white',
+                # fontweight='bold', ha='center',
+                # va='center', zorder=100)
+
+    v = 22
+    ax.annotate(str(v), vcoords[v, :], fontsize=8,
+            fontweight='bold', ha='center',
+            va='center', zorder=100)
+
+    v = 117
+    ax.annotate(str(v), vcoords[v, :], fontsize=8, color='white',
+            fontweight='bold', ha='center',
+            va='center', zorder=100)
+
+    # for v in [46, 131]:
+        # ax.annotate(str(v), vcoords[v, :], fontsize=8, color='white',
+                # ha='center',
+                # va='center', zorder=100)
+
+    circle = Circle(center, radius, edgecolor='k', fill=False, linestyle='--',
+            zorder=101)
+    ax.add_patch(circle)
+
+    return ax, idscore, idsborder
+
+##########################################################
+def plot_graph2(g, edge0, plotpath, vszs, vclr, ax=None, shppath=''):
+    """Plot the graph @gin which can be an igraph object or a graphml file path. If @shppath is provided, plot the border given by @shppath."""
+
+    xattr, yattr = 'x', 'y'
+    vcoords = np.array([(x, y) for x, y in zip(g.vs[xattr], g.vs[yattr])])
+    vcoords = vcoords.astype(float)
+
+    ecoords = []
+    for e in g.es:
+        ecoords.append([ [float(vcoords[e.source][0]), float(vcoords[e.source][1])],
+                [float(vcoords[e.target][0]), float(vcoords[e.target][1])], ])
+
+    ax, idscore, idsborder = plot_graph_coords(edge0, vcoords, ecoords, ax, shppath, vszs, vclr, True)
+    ax.axis('off')
+    plt.tight_layout()
+    plt.savefig(plotpath)
+    return idscore, idsborder
+
+##########################################################
+def plot_networks(gs, edge0, es1, dfref, diffsums, labels, outdir):
+
+    vclr = ['blue'] * gs[0].vcount()
     vszs = np.log(diffsums + .001)
     vszs = (vszs - np.min(vszs)) / (np.max(vszs) - np.min(vszs))
     # breakpoint()
@@ -175,13 +258,28 @@ def plot_networks(gs, es1, dfref, diffsums, labels, outdir):
     for i in range(2):
         z = [gs[i].vs.find(wid=x).index for x in dfref.wid.values]
         gsind.append(gs[i].induced_subgraph(z))
-        vlbl = [str(x) for x in range(gsind[i].vcount())]
+        # vlbl = [str(x) for x in range(gsind[i].vcount())]
+        # vlbl = ['{}:{:.04f}'.format(x, y) for x, y in zip(range(gsind[i].vcount()), diffsums)]
+        # vlbl = [str(x) for x in gsind[i].degree()]
+        vlbl = ['' for _ in gsind[i].degree()]
+        vlbl[edge0[0]] = gsind[i].vs[edge0[0]].degree()
+        vlbl[edge0[1]] = gsind[i].vs[edge0[1]].degree()
         if i == 0: coords = gsind[-1].layout('fr')
         plotpath = pjoin(outdir, '{}_netw.png'.format(labels[i]))
         igraph.plot(gsind[i], plotpath, layout=coords, vertex_size=vszs,
                     vertex_color=vclr,
                     vertex_label=vlbl, vertex_label_color='black',
                     bbox=bbox)
+        z = np.array(coords)
+        gsind[i].vs['x'] = z[:, 0]
+        gsind[i].vs['y'] = z[:, 1]
+        
+        idscore, idsborder = plot_graph2(gsind[i], edge0,
+                plotpath.replace('.png', '2.png'), vszs, vclr)
+
+        info('Core: {}+-{}'.format(np.mean(diffsums[idscore]), np.std(diffsums[idscore])))
+        info('Border: {}+-{}'.format(np.mean(diffsums[idsborder]), np.std(diffsums[idsborder])))
+        
 
 ##########################################################
 def calculate_crossrelation(dfref, g, coinc, maxdist):
@@ -305,7 +403,7 @@ def generate_graph(model, n, k):
     return g, g.get_adjacency_sparse()
 
 ##########################################################
-def main(cfgpath, nprocs, outdir):
+def main(nprocs, outdir):
     info(inspect.stack()[0][3] + '()')
 
     random.seed(0); np.random.seed(0) # Random seed
@@ -329,6 +427,10 @@ def main(cfgpath, nprocs, outdir):
 
     mean0, std0 = run_experiment(g, 'orig', dfref, coincexp, outdir)
 
+    # edge0 = [22, 63]
+    # edge0 = [117, 194]
+    edge0 = [22, 117]
+
     means, stds = [], []
     es1 = []
     for i, v0 in enumerate(vs2):
@@ -338,11 +440,10 @@ def main(cfgpath, nprocs, outdir):
             x = np.random.randint(g2.vcount())
             if not (x in neighs + [v0]): break
 
-        # v0, x = (22, 63)
-        # v0, x = (117, 194)
-        v0, x = (22, 117)
+        v0, x = edge0
         g2.add_edge(v0, x)
-        print(v0, x)
+        info('IDS:', v0, x)
+        info('Degree:', g.vs.degree()[v0],g.vs.degree()[x],)
         ret = run_experiment(g2, 'new', dfref, coincexp, outdir)
         means.append(ret[0]); stds.append(ret[1])
         es1.append([v0, x])
@@ -351,22 +452,20 @@ def main(cfgpath, nprocs, outdir):
     mean1, std1 = means[0], stds[0]
     diffs = plot_abs_diff(mean0, mean1, 'ba', outdir)
     diffsums = plot_diff_sums_hist(diffs, 'ba', outdir)
-    plot_networks([g, g2], es1, dfref, diffsums, labels, outdir)
+    plot_networks([g, g2], edge0, es1, dfref, diffsums, labels, outdir)
 
 ##########################################################
 if __name__ == "__main__":
     info(datetime.date.today())
     t0 = time.time()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--config', default='config/toy01.json', help='Experiments settings')
     parser.add_argument('--nprocs', default=1, type=int, help='Number of procs')
     parser.add_argument('--outdir', default='/tmp/out/', help='Output directory')
     args = parser.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
     readmepath = create_readme(sys.argv, args.outdir)
-    shutil.copy(args.config, args.outdir)
-    main(args.config, args.nprocs, args.outdir)
+    main(args.nprocs, args.outdir)
     info('Elapsed time:{:.02f}s'.format(time.time()-t0))
     info('Output generated in {}'.format(args.outdir))
 
