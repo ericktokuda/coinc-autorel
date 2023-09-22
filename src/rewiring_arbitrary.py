@@ -13,6 +13,7 @@ import numpy as np
 import scipy; import scipy.optimize
 import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+plt.rcParams['text.usetex'] = True
 import matplotlib.collections as mc
 from myutils import info, create_readme, transform, parallelize
 import igraph
@@ -143,23 +144,8 @@ def plot_diff_sums_hist(diffs, lbl, outdir):
     plt.savefig(plotpath); plt.close()
     return sums
 
-##########################################################
-def plot_graph(g, dfref, diffsums, lbl, outdir):
-    vattrs = np.ones(g.vcount())
-    for i, wid in enumerate(dfref.wid):
-        idx = g.vs.select(wid=wid).indices[0]
-        vattrs[idx] = diffsums[i]
-
-    # vszs = np.array(g.vs['sz']) * 10
-    vszs = np.array(vattrs) * 10
-    min0, max0 = np.min(vszs), np.max(vszs)
-    vszs = (vszs - min0) / (max0 - min0)
-    vszs = vszs * 10 + 5
-    vcols = 'blue'
-    igraph.plot(g, plotpath, vertex_size=vszs, vertex_color=vcols)
-
 #############################################################
-def plot_graph_coords(edge0, vcoords, ecoords, ax, shppath, vszs, vclr, inverty=False):
+def plot_graph_coords(edge0, vcoords, ecoords, ax, shppath, degrees, diffsums, vszs, vclr, inverty=False):
     """Plot the grpah, with vertices colored by accessibility."""
 
     if not ax: fig, ax = plt.subplots(figsize=(6, 6))
@@ -191,42 +177,47 @@ def plot_graph_coords(edge0, vcoords, ecoords, ax, shppath, vszs, vclr, inverty=
 
     for v in edge0:
         sc = ax.scatter(vcoords[v, 0], vcoords[v, 1],
-                c=vclr[v], linewidths=2, edgecolors='k', alpha=.75,
+                # c=vclr[v], linewidths=2, edgecolors='k', alpha=.75,
+                c='red', linewidths=2, edgecolors='k', alpha=1,
                 s=vszs[v]*14, zorder=10) # vertices
 
 
     segs = mc.LineCollection(ecoords, colors='dimgray', linewidths=.7, alpha=.9) # edges
     ax.add_collection(segs)
 
-    # for v in edge0:
-        # ax.annotate(str(v), vcoords[v, :], fontsize=8,
+    for v in edge0:
+        ax.annotate(str(v), vcoords[v, :], fontsize=8,
         # ax.annotate(str(v), vcoords[v, :], fontsize=8, color='white',
-                # fontweight='bold', ha='center',
-                # va='center', zorder=100)
+                fontweight='bold', ha='center',
+                va='center', zorder=100)
 
-    v = 22
-    ax.annotate(str(v), vcoords[v, :], fontsize=8,
-            fontweight='bold', ha='center',
-            va='center', zorder=100)
-
-    v = 117
-    ax.annotate(str(v), vcoords[v, :], fontsize=8, color='white',
-            fontweight='bold', ha='center',
-            va='center', zorder=100)
-
-    # for v in [46, 131]:
-        # ax.annotate(str(v), vcoords[v, :], fontsize=8, color='white',
-                # ha='center',
-                # va='center', zorder=100)
+    if 117 in edge0 and 194 in edge0:
+        for v in [46, 131]:
+            ax.annotate(str(v), vcoords[v, :], fontsize=8, color='white',
+                    ha='center', va='center', zorder=100)
 
     circle = Circle(center, radius, edgecolor='k', fill=False, linestyle='--',
             zorder=101)
     ax.add_patch(circle)
 
+    degs = np.array(degrees)[edge0[0]], np.array(degrees)[edge0[1]], 
+    diffscore, diffsborder = np.array(diffsums)[idscore], np.array(diffsums)[idsborder]
+    coremean, corestd = np.mean(diffscore), np.std(diffscore)
+    bordermean, borderstd = np.mean(diffsborder), np.std(diffsborder)
+    
+    
+    minx, miny = np.min(vcoords, axis=0)
+    maxx, maxy = np.max(vcoords, axis=0)
+    ax.annotate(r'$\mu_{{core}}={:.03f}\pm{:.03f}$\\\\' \
+            r'$\mu_{{border}}={:.03f}\pm{:.03f}$'.
+            format(coremean, corestd, bordermean, borderstd),
+            (minx - 0.5, maxy), fontsize=14, color='k',
+            ha='left', va='center', zorder=100)
+
     return ax, idscore, idsborder
 
 ##########################################################
-def plot_graph2(g, edge0, plotpath, vszs, vclr, ax=None, shppath=''):
+def plot_graph2(g, edge0, plotpath, diffsums, vszs, vclr, ax=None, shppath=''):
     """Plot the graph @gin which can be an igraph object or a graphml file path. If @shppath is provided, plot the border given by @shppath."""
 
     xattr, yattr = 'x', 'y'
@@ -238,7 +229,7 @@ def plot_graph2(g, edge0, plotpath, vszs, vclr, ax=None, shppath=''):
         ecoords.append([ [float(vcoords[e.source][0]), float(vcoords[e.source][1])],
                 [float(vcoords[e.target][0]), float(vcoords[e.target][1])], ])
 
-    ax, idscore, idsborder = plot_graph_coords(edge0, vcoords, ecoords, ax, shppath, vszs, vclr, True)
+    ax, idscore, idsborder = plot_graph_coords(edge0, vcoords, ecoords, ax, shppath, g.degree(), diffsums, vszs, vclr, True)
     ax.axis('off')
     plt.tight_layout()
     plt.savefig(plotpath)
@@ -266,16 +257,16 @@ def plot_networks(gs, edge0, es1, dfref, diffsums, labels, outdir):
         vlbl[edge0[1]] = gsind[i].vs[edge0[1]].degree()
         if i == 0: coords = gsind[-1].layout('fr')
         plotpath = pjoin(outdir, '{}_netw.png'.format(labels[i]))
-        igraph.plot(gsind[i], plotpath, layout=coords, vertex_size=vszs,
-                    vertex_color=vclr,
-                    vertex_label=vlbl, vertex_label_color='black',
-                    bbox=bbox)
+        # igraph.plot(gsind[i], plotpath, layout=coords, vertex_size=vszs,
+                    # vertex_color=vclr,
+                    # vertex_label=vlbl, vertex_label_color='black',
+                    # bbox=bbox)
         z = np.array(coords)
         gsind[i].vs['x'] = z[:, 0]
         gsind[i].vs['y'] = z[:, 1]
         
         idscore, idsborder = plot_graph2(gsind[i], edge0,
-                plotpath.replace('.png', '2.png'), vszs, vclr)
+                plotpath.replace('.png', '2.png'), diffsums, vszs, vclr)
 
         info('Core: {}+-{}'.format(np.mean(diffsums[idscore]), np.std(diffsums[idscore])))
         info('Border: {}+-{}'.format(np.mean(diffsums[idsborder]), np.std(diffsums[idsborder])))
@@ -428,8 +419,8 @@ def main(nprocs, outdir):
     mean0, std0 = run_experiment(g, 'orig', dfref, coincexp, outdir)
 
     # edge0 = [22, 63]
-    # edge0 = [117, 194]
-    edge0 = [22, 117]
+    edge0 = [117, 194]
+    # edge0 = [22, 117]
 
     means, stds = [], []
     es1 = []
