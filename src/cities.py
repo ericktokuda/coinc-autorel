@@ -33,30 +33,6 @@ PALETTE = ['#FF0000','#0000FF','#00FF00','#8e00a3','#ff7f00','#ffff33','#a65628'
 W = 640; H = 480
 
 ##########################################################
-def generate_sbm():
-    """Generate SBM"""
-    info(inspect.stack()[0][3] + '()')
-    nblocks = 4
-    blocksz = 50
-    n = nblocks * blocksz
-    prefmatrix = np.zeros((nblocks, nblocks), dtype=float)
-    prefmatrix[0, 1] = .005
-    prefmatrix[1, 2] = .01
-    prefmatrix[2, 3] = .05
-    prefmatrix[3, 0] = .15
-    p = .3
-    prefmatrix += prefmatrix.T
-    prefmatrix += np.diag([p, p, p, p])
-    blockszs = [blocksz, blocksz, blocksz, blocksz]
-
-    grps = []
-    for i in range(nblocks):
-        grps += [i] * blocksz # Be careful with this list multipl operation
-
-    g = igraph.Graph.SBM(n, list(prefmatrix), blockszs, directed=False, loops=False)
-    return g, g.get_adjacency(), grps
-
-##########################################################
 def interiority(dataorig):
     """Calculate the interiority index of the two rows. @vs has 2rows and n-columns, where
     n is the number of features"""
@@ -170,14 +146,12 @@ def generate_graph(model, n, k):
     elif model == 'sbm':
         nblocks = 4
         blocksz = n // nblocks
-        prefmatrix = np.zeros((nblocks, nblocks), dtype=float)
-        prefmatrix[0, 1] = .02
-        prefmatrix[1, 2] = .05
-        prefmatrix[2, 3] = .10
-        prefmatrix[3, 0] = .20
-        p = .4
-        prefmatrix += prefmatrix.T
-        prefmatrix += np.diag([p, p, p, p])
+        probloose = .005
+        prefmatrix = np.ones((nblocks, nblocks), dtype=float) * probloose
+        prefmatrix[0 ,0] = .40
+        prefmatrix[1 ,1] = .30
+        prefmatrix[2 ,2] = .20
+        prefmatrix[3 ,3] = .10
         blockszs = [blocksz, blocksz, blocksz, n - (nblocks - 1) * blocksz]
 
         grps = []
@@ -185,7 +159,6 @@ def generate_graph(model, n, k):
             grps += [i] * blocksz # Be careful with this list multipl operation
 
         g = igraph.Graph.SBM(n, list(prefmatrix), blockszs, directed=False, loops=False)
-        # return g, g.get_adjacency(), grps
     else:
         raise Exception('Invalid model')
 
@@ -237,7 +210,7 @@ def get_rgg_params(nvertices, avgdegree):
     return r
 
 ##########################################################
-def plot_graph(g, coordsin, labels, vszs, vcolours, outpath):
+def plot_graph(g, coordsin, labels, vszs, vcolours, outpath, bbox=(1600, 1600)):
     coords = np.array(g.layout(layout='fr')) if coordsin is None else coordsin
 
     a = 7
@@ -250,17 +223,16 @@ def plot_graph(g, coordsin, labels, vszs, vcolours, outpath):
 
     visual_style = {}
     visual_style["layout"] = coords
-    visual_style["bbox"] = (800, 800)
+    visual_style["bbox"] = bbox
     visual_style["margin"] = 10
     visual_style['vertex_label'] = labels
     # visual_style['vertex_label'] = range(g.vcount())
     visual_style['vertex_color'] = 'blue' if vcolours == None else vcolours
     visual_style['vertex_size'] = vszs
     visual_style['vertex_frame_width'] = 1
-
-    # widths = np.array(g.es['weight'])
-    # widths[widths < 0] = 0
-    # visual_style['edge_width'] = np.abs(widths)
+    visual_style['vertex_frame_width'] = 1
+    # visual_style['edge_color'] = '#00000011'
+    visual_style['edge_color'] = '#000000BB'
 
     igraph.plot(g, outpath, **visual_style)
     return coords
@@ -353,6 +325,7 @@ def plot_curves_and_avg_comm(curves, ylbl, vcols, lbl, outdir):
 def run_experiment(top, runid, coincexp, maxdist, outrootdir):
     info(inspect.stack()[0][3] + '()')
 
+    info(top)
     outdir = pjoin(outrootdir, '{:03d}'.format(maxdist)) # Create output folders
     dirlayout1 = pjoin(outdir, 'netorig'); os.makedirs(dirlayout1, exist_ok=True)
     dirlayout2 = pjoin(outdir, 'netcoinc'); os.makedirs(dirlayout2, exist_ok=True)
@@ -376,13 +349,14 @@ def run_experiment(top, runid, coincexp, maxdist, outrootdir):
         xy = None
 
     # Coincidence between feature vectors
-    pklpath = pjoin(outdir, '{}_{:02d}.pkl'.format(gid, runid))
+    pklpath = pjoin(outdir, '{}_{:02d}_coinc.pkl'.format(gid, runid))
     if isfile(pklpath):
         coinc0 = pickle.load(open(pklpath, 'rb'))
     else:
         vfeats, featlbls = extract_features(adj, g)
         coinc0 = get_coincidx_values(vfeats, coincexp, False)
         pickle.dump(coinc0, open(pklpath, 'wb'))
+        plt.hist(coinc0.flatten()); plt.savefig(pklpath.replace('.pkl', '.png'))
 
     netorig = pjoin(outdir, '{}_{:02d}.pdf'.format(gid, runid))
     plotpath = pjoin(outdir, '{}_{:02d}_autorel.png'.format(gid, runid))
@@ -395,8 +369,9 @@ def run_experiment(top, runid, coincexp, maxdist, outrootdir):
     means, stds = calculate_autorelation(g, coinc0, maxdist)
     plot_curves_and_avg(means, '', plotpath)
 
-    for coincthresh in np.arange(.5, .99, .02):
-    # for coincthresh in [.78]: # TODO: REMOVE THIS
+    # for coincthresh in np.arange(.5, .99, .02):
+    # for coincthresh in np.arange(.5, .99, .2):
+    for coincthresh in [.78]: # TODO: REMOVE THIS
         expidstr = '{}_T{:.02f}_{:02d}'.format(gid, coincthresh, runid)
         info(expidstr)
 
@@ -416,8 +391,7 @@ def run_experiment(top, runid, coincexp, maxdist, outrootdir):
         lbls = [str(id) for id in giant.vs['origid']]
 
         origids = list(giant.vs['origid'])
-        # comm = giant.community_multilevel() # comm = giant.community_label_propagation()
-        comm = giant.community_label_propagation()
+        comm = giant.community_multilevel() # comm = giant.community_label_propagation()
         membs = comm.membership
 
         clrnotgiant = '#FFFFFF'
