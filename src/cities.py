@@ -293,7 +293,9 @@ def plot_curves_and_avg_comm(curves, ylbl, vcols, lbl, outdir):
     maxx = curves.shape[1]
     xs = range(1, maxx + 1)
 
-    vcolsuniq = np.unique(vcols)
+    vcolsuniq, counts = np.unique(vcols, return_counts=True)
+    vcolsuniq = vcolsuniq[np.argsort(counts)][::-1] # Ordered by comm size
+
     figs, axs, yss = {}, {}, {}
     for col in vcolsuniq:
         fig, ax = plt.subplots(figsize=(W*.01, H*.01), dpi=100)
@@ -311,15 +313,17 @@ def plot_curves_and_avg_comm(curves, ylbl, vcols, lbl, outdir):
         fig = figs[col]
 
         z = np.mean(yss[col], axis=0)
+        m = len(yss[col])
         ax.plot(xs, z, color='k')
 
         ax.set_ylim(0, 1.1)
         ax.set_xlabel('Shift')
         ax.set_ylabel(ylbl)
         plotpath = pjoin(outdir, '{}_comm{}.png'.format(lbl, i))
-        fig.savefig(plotpath)
-
-    plt.close()
+        # ax.text(.9, .9, '{} lines'.format(m),
+                 # horizontalalignment='center', verticalalignment='center',
+                 # transform = ax.transAxes)
+        fig.savefig(plotpath, bbox_inches='tight'); plt.close()
 
 ##########################################################
 def run_experiment(top, runid, coincexp, maxdist, outrootdir):
@@ -393,6 +397,11 @@ def run_experiment(top, runid, coincexp, maxdist, outrootdir):
         origids = list(giant.vs['origid'])
         comm = giant.community_multilevel() # comm = giant.community_label_propagation()
         membs = comm.membership
+
+        # Order membership id by cluster size
+        _, counts = np.unique(membs, return_counts=True)
+        idmap = {x: newid for newid, x in enumerate(reversed(np.argsort(counts)))}
+        membs = np.vectorize(idmap.get)(membs)
 
         clrnotgiant = '#FFFFFF'
         clrsmallcomm = '#BBBBBB'
