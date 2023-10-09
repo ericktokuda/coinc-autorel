@@ -1,5 +1,5 @@
 {
-	"tops": ["$HOME/temp/citiessample/new/"],
+	"tops": ["sbm"],
 	"coincexp": [3],
 	"maxdist": [4],
 	"nruns": [1]

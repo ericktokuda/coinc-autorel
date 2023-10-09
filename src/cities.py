@@ -33,6 +33,30 @@ PALETTE = ['#FF0000','#0000FF','#00FF00','#8e00a3','#ff7f00','#ffff33','#a65628'
 W = 640; H = 480
 
 ##########################################################
+def generate_sbm():
+    """Generate SBM"""
+    info(inspect.stack()[0][3] + '()')
+    nblocks = 4
+    blocksz = 50
+    n = nblocks * blocksz
+    prefmatrix = np.zeros((nblocks, nblocks), dtype=float)
+    prefmatrix[0, 1] = .005
+    prefmatrix[1, 2] = .01
+    prefmatrix[2, 3] = .05
+    prefmatrix[3, 0] = .15
+    p = .3
+    prefmatrix += prefmatrix.T
+    prefmatrix += np.diag([p, p, p, p])
+    blockszs = [blocksz, blocksz, blocksz, blocksz]
+
+    grps = []
+    for i in range(nblocks):
+        grps += [i] * blocksz # Be careful with this list multipl operation
+
+    g = igraph.Graph.SBM(n, list(prefmatrix), blockszs, directed=False, loops=False)
+    return g, g.get_adjacency(), grps
+
+##########################################################
 def interiority(dataorig):
     """Calculate the interiority index of the two rows. @vs has 2rows and n-columns, where
     n is the number of features"""
@@ -64,9 +88,10 @@ def coincidence(data, a, D):
     return inter * np.power(jac, D)
 
 ##########################################################
-def get_coincidx_values(dataorig, alpha, coincexp, standardize):
+def get_coincidx_values(dataorig, coincexp, standardize):
     """Get coincidence value between each combination in @dataorig"""
     info(inspect.stack()[0][3] + '()')
+    alpha = .5
     n, m = dataorig.shape
     if standardize:
         data = StandardScaler().fit_transform(dataorig)
@@ -86,15 +111,16 @@ def extract_simple_feats_all(adj, g):
     # info(inspect.stack()[0][3] + '()')
     labels = 'dg cl'.split(' ')
     feats = []
-    cl = np.array(g.degree()) # Calculating twice the degree instead
+    # cl = np.array(g.degree()) # Calculating twice the degree instead
     deg = np.array(g.degree())
 
     # accpath = '/home/dufresne/temp/20230728-accessibs/0671806_Sierra_Madre_undirected_acc05.txt'
     # trans = calculate_trans_feats(g) # Clustering coefficient
+    clucoeffs = np.array(g.as_undirected().transitivity_local_undirected(mode='zero'))
     # bet = g.betweenness() # Betweenness centrality
     # accessib = calculate_accessib_feats(accpath) # Accessibility
 
-    feats = np.vstack((deg, cl)).T
+    feats = np.vstack((deg, clucoeffs)).T
     return feats, labels
 
 ##########################################################
@@ -141,6 +167,25 @@ def generate_graph(model, n, k):
         vk = list(vk.values())
         k = np.mean(vk)
         g = igraph.Graph.from_networkx(G0)
+    elif model == 'sbm':
+        nblocks = 4
+        blocksz = n // nblocks
+        prefmatrix = np.zeros((nblocks, nblocks), dtype=float)
+        prefmatrix[0, 1] = .02
+        prefmatrix[1, 2] = .05
+        prefmatrix[2, 3] = .10
+        prefmatrix[3, 0] = .20
+        p = .4
+        prefmatrix += prefmatrix.T
+        prefmatrix += np.diag([p, p, p, p])
+        blockszs = [blocksz, blocksz, blocksz, n - (nblocks - 1) * blocksz]
+
+        grps = []
+        for i in range(nblocks):
+            grps += [i] * blocksz # Be careful with this list multipl operation
+
+        g = igraph.Graph.SBM(n, list(prefmatrix), blockszs, directed=False, loops=False)
+        # return g, g.get_adjacency(), grps
     else:
         raise Exception('Invalid model')
 
@@ -305,49 +350,48 @@ def plot_curves_and_avg_comm(curves, ylbl, vcols, lbl, outdir):
     plt.close()
 
 ##########################################################
-def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
-    """Single run"""
-    info('{} n:{},k:{:.02f}'.format(top, n, k))
+def run_experiment(top, runid, coincexp, maxdist, outrootdir):
+    info(inspect.stack()[0][3] + '()')
 
-    outdir = pjoin(outrootdir, '{:03d}'.format(maxdist))
-    dirlayout1 = pjoin(outdir, 'layout1')
-    dirlayout2 = pjoin(outdir, 'layout2')
-    dirlayout3 = pjoin(outdir, 'layout3')
-    dirsign = pjoin(outdir, 'signatures')
-    os.makedirs(dirlayout1, exist_ok=True)
-    os.makedirs(dirlayout2, exist_ok=True)
-    os.makedirs(dirlayout3, exist_ok=True)
-    os.makedirs(dirsign, exist_ok=True)
+    outdir = pjoin(outrootdir, '{:03d}'.format(maxdist)) # Create output folders
+    dirlayout1 = pjoin(outdir, 'netorig'); os.makedirs(dirlayout1, exist_ok=True)
+    dirlayout2 = pjoin(outdir, 'netcoinc'); os.makedirs(dirlayout2, exist_ok=True)
+    dirlayout3 = pjoin(outdir, 'netcoincgiant'); os.makedirs(dirlayout3, exist_ok=True)
+    dirsignat = pjoin(outdir, 'signatures'); os.makedirs(dirsignat, exist_ok=True)
 
-    isext = top.endswith('.graphml')
-    runid += 1
-    random.seed(runid); np.random.seed(runid) # Random seed
-    gid = os.path.basename(top).replace('.graphml', '') if isext else top
-    pklpath = pjoin(outdir, '{}_{:02d}.pkl'.format(gid, runid))
+    random.seed(runid); np.random.seed(runid) # Random seeds
 
-    g, adj = generate_graph(top, n, k)
+    isgraphml = top.endswith('.graphml')
+    gid = os.path.basename(top).replace('.graphml', '') if isgraphml else top
+
+    n = 2000; k = 6
+    g, adj = generate_graph(top, n, k) # Create graph
+    g.vs['origid'] = list(range(g.vcount()))
     info('n:{},k:{:.02f}'.format(g.vcount(), np.mean(g.degree())))
 
-    xy = None
-    if 'x' in g.vertex_attributes():
-        xy = np.array([g.vs['x'], g.vs['y']]).T
-        xy = [[x, -y] for x, y in xy]
+    if 'x' in g.vertex_attributes(): # Set the spatial layout
+        aux = np.array([g.vs['x'], g.vs['y']]).T
+        xy = [[x, -y] for x, y in aux]
+    else:
+        xy = None
 
+    # Coincidence between feature vectors
+    pklpath = pjoin(outdir, '{}_{:02d}.pkl'.format(gid, runid))
     if isfile(pklpath):
         coinc0 = pickle.load(open(pklpath, 'rb'))
     else:
         vfeats, featlbls = extract_features(adj, g)
-        coinc0 = get_coincidx_values(vfeats, .5, coincexp, False)
+        coinc0 = get_coincidx_values(vfeats, coincexp, False)
         pickle.dump(coinc0, open(pklpath, 'wb'))
 
     netorig = pjoin(outdir, '{}_{:02d}.pdf'.format(gid, runid))
-    # netorig2 = pjoin(outdir, '{}_{:02d}_ids.pdf'.format(gid, runid))
     plotpath = pjoin(outdir, '{}_{:02d}_autorel.png'.format(gid, runid))
     lbl = '{}_{:02d}'.format(gid, runid)
 
     vsz = 7
     coords1 = plot_graph(g, xy, None, vsz, None, netorig)
 
+    # Auto relation considering the coincidence betw the features
     means, stds = calculate_autorelation(g, coinc0, maxdist)
     plot_curves_and_avg(means, '', plotpath)
 
@@ -355,73 +399,47 @@ def run_experiment(top, n, k, runid, coincexp, maxdist, outrootdir):
     # for coincthresh in [.78]: # TODO: REMOVE THIS
         expidstr = '{}_T{:.02f}_{:02d}'.format(gid, coincthresh, runid)
         info(expidstr)
+
+        # Define plots paths
         netcoinc1 = pjoin(dirlayout1, '{}.png'.format(expidstr))
         netcoinc2 = pjoin(dirlayout2, '{}.png'.format(expidstr))
         netcoinc3 = pjoin(dirlayout3, '{}.png'.format(expidstr))
         if isfile(netcoinc1) and isfile(netcoinc2): continue
 
-        coinc = threshold_values(coinc0.copy(), coincthresh)
-        gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
-        coinc1 = get_coincidx_values(means, .5, coincexp, False)
-        coinc = threshold_values(coinc1, coincthresh)
+        coinc = get_coincidx_values(means, coincexp, False)
+        coinc = threshold_values(coinc, coincthresh)
         gcoinc = igraph.Graph.Weighted_Adjacency(coinc, mode='undirected')
         gcoinc.vs['origid'] = g.vs['origid']
+
         plot_graph(gcoinc, None, None, g.vs.degree(), None, netcoinc2)
         giant = gcoinc.components().giant()
         lbls = [str(id) for id in giant.vs['origid']]
 
         origids = list(giant.vs['origid'])
+        # comm = giant.community_multilevel() # comm = giant.community_label_propagation()
         comm = giant.community_label_propagation()
         membs = comm.membership
-        defclr1 = '#FFFFFF'
-        defclr2 = '#BBBBBB'
+
+        clrnotgiant = '#FFFFFF'
+        clrsmallcomm = '#BBBBBB'
 
         vcols = []
         for i in range(g.vcount()):
-            if not (i in origids): vcol = defclr1
+            if not (i in origids): # Outside of the giant component
+                vcol = clrnotgiant
             else:
                 memb = membs[origids.index(i)]
-                if memb >= len(PALETTE):
-                    vcol = defclr2
+                if memb >= len(PALETTE): # In a small community
+                    vcol = clrsmallcomm
                 else:
                     vcol = PALETTE[membs[origids.index(i)]]
             vcols.append(vcol)
 
         plot_graph(giant, None, None, giant.vs.degree(),
-                np.array(vcols)[giant.vs['origid']].tolist(),
-                netcoinc3)
+                np.array(vcols)[giant.vs['origid']].tolist(), netcoinc3)
 
         plot_graph(g, coords1, None, vsz, vcols, netcoinc1)
-        plot_curves_and_avg_comm(means, '', vcols, expidstr, dirsign)
-
-##########################################################
-def export_params(tops, n, k, espath, coincexp, nruns, outdir):
-    p = {
-        'refmodel': espath, 'n': n, 'k': k,
-        'coincexp': coincexp, 'nruns': nruns}
-    outpath = pjoin(outdir, 'params.json')
-    json.dump(p, open(outpath, 'w'))
-
-##########################################################
-def run_group(graphml, tops, nruns, coincexp, maxdist, nprocs, readmepath, outdir):
-    """Spawl jobs"""
-    # Get the n,m,k from the reference network
-    g, adj = generate_graph(graphml, 0, 0) # connected and undirected
-    ginfo = '{}\tnv:{}\tne:{}'.format(os.path.basename(graphml), g.vcount(),
-            g.ecount())
-    myutils.append_to_file(readmepath, ginfo)
-    n, m = [g.vcount()], [g.ecount()]
-    k = [m[0] / n[0] * 2]
-    os.makedirs(outdir, exist_ok=True)
-
-    export_params(tops, n[0], k[0], graphml, coincexp, nruns, outdir)
-
-    runids = range(nruns)
-    args1 = [[graphml, 0, 0, 0, coincexp, d, outdir] for d in maxdist]
-    args2 = list(product(tops, n, k, runids, [coincexp], maxdist, [outdir]))
-    argsconcat = args1 + args2
-
-    parallelize(run_experiment, nprocs, argsconcat)
+        plot_curves_and_avg_comm(means, '', vcols, expidstr, dirsignat)
 
 ##########################################################
 def main(cfgpath, nprocs, readmepath, outrootdir):
@@ -429,32 +447,36 @@ def main(cfgpath, nprocs, readmepath, outrootdir):
 
     cfg = json.load(open(cfgpath))
 
-    tops = []
-    coincexp = cfg['coincexp'][0]
-    netdirs = cfg['netdirs']
-    labels = cfg['labels']
+    coincexp = cfg['coincexp']
+    tops = cfg['tops']
     nruns = cfg['nruns'][0]
     maxdist = cfg['maxdist']
+    runids = range(nruns)
 
-    avgs = {}
-    nets, ns, ks = [], [], []
-    for d, lbl in zip(netdirs, labels):
-        # fs = reversed(os.listdir(d)) # TODO: REMOVE THIS
-        fs = os.listdir(d)
-        for f in fs:
-            if not f.endswith('.graphml'): continue
-            fid = f.replace('.graphml', '')
-            graphml = pjoin(d, f)
-            outdir = pjoin(outrootdir, fid)
-            run_group(graphml, tops, nruns, coincexp, maxdist, nprocs,
-                    readmepath, outdir)
+    argsconcat = []
+    for top in tops: # Can be either 'sbm' or a path to directory with graphml files
+        if top == 'sbm':
+            outdir = pjoin(outrootdir, 'sbm')
+            args = list(product(['sbm'], runids, coincexp, maxdist, [outdir]))
+            argsconcat.extend(args)
+        else:
+            top = top.replace('$HOME', os.environ['HOME'])
+            for f in sorted(os.listdir(top)):
+                if not f.endswith('.graphml'): continue
+                fid = f.replace('.graphml', '')
+                graphpath = pjoin(top, f)
+                outdir = pjoin(outrootdir, fid)
+                args = list(product([graphpath], runids, coincexp, maxdist, [outdir]))
+                argsconcat.extend(args)
+
+    parallelize(run_experiment, nprocs, argsconcat)
 
 ##########################################################
 if __name__ == "__main__":
     info(datetime.date.today())
     t0 = time.time()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--config', default='config/toy01.json', help='Experiments settings')
+    parser.add_argument('--config', default='config/sbm.json', help='Experiments settings')
     parser.add_argument('--nprocs', default=1, type=int, help='Number of procs')
     parser.add_argument('--outdir', default='/tmp/out/', help='Output directory')
     args = parser.parse_args()
