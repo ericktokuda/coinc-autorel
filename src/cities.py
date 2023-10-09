@@ -221,6 +221,11 @@ def plot_graph(g, coordsin, labels, vszs, vcolours, outpath, bbox=(1600, 1600)):
 
     vszs += 3
 
+    alpha = .4 - (2.3e-6) * g.ecount() # Magical numbers calibrated to our networks
+    if alpha < 0.1:  alpha = .1
+    elif alpha > 1: alpha = 1
+    alphahex = hex(int(alpha * 255))
+
     visual_style = {}
     visual_style["layout"] = coords
     visual_style["bbox"] = bbox
@@ -231,8 +236,7 @@ def plot_graph(g, coordsin, labels, vszs, vcolours, outpath, bbox=(1600, 1600)):
     visual_style['vertex_size'] = vszs
     visual_style['vertex_frame_width'] = 1
     visual_style['vertex_frame_width'] = 1
-    # visual_style['edge_color'] = '#00000011'
-    visual_style['edge_color'] = '#000000BB'
+    visual_style['edge_color'] = '#000000' + alphahex[-2:]
 
     igraph.plot(g, outpath, **visual_style)
     return coords
