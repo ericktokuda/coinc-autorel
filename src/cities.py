@@ -19,18 +19,20 @@ from myutils import info, create_readme, transform, plot
 import igraph
 import networkx as nx
 import pandas as pd
+import sklearn
 from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import AgglomerativeClustering
+from scipy.cluster import hierarchy
 from itertools import product, combinations
 from myutils import parallelize, graph
 import json
 import shutil
-from sklearn.cluster import AgglomerativeClustering
-from scipy.cluster import hierarchy
 import pickle
 
 # PALETTE = ['#4daf4a', '#e41a1c', '#ff7f00', '#984ea3', '#ffff133', '#a65628', '#377eb8']
 PALETTE = ['#FF0000','#0000FF','#00FF00','#8e00a3','#ff7f00','#ffff33','#a65628','#f70082']
 W = 640; H = 480
+R = 6371 # Earth radius
 
 ##########################################################
 def interiority(dataorig):
@@ -83,20 +85,58 @@ def get_coincidx_values(dataorig, coincexp, standardize):
     return adj
 
 ##########################################################
-def extract_simple_feats_all(adj, g):
+def get_farthest_points(pos, metric='euclidean'):
+    """Get farthest points and corresponding distance (diameter)."""
+    info(inspect.stack()[0][3] + '()')
+    diam = -1
+    i0, j0 = -1, -1
+    for i in range(len(pos) - 1):
+        p1 = [g.vs[i]['x'], g.vs[i]['y']]
+        for j in range(i + 1, len(pos)):
+            p2 = [g.vs[j]['x'],g.vs[j]['y']]
+            dist = myutils.geo.haversine(p1, p2)
+            if dist > diam:
+                diam = dist; i0 = i; j0 = j
+    return diam, [i0, j0]
+
+##########################################################
+def extract_simple_feats_all(adj, g, isgeo):
     # info(inspect.stack()[0][3] + '()')
-    labels = 'dg cl'.split(' ')
+    labels = 'dg ds'.split(' ')
     feats = []
     # cl = np.array(g.degree()) # Calculating twice the degree instead
     deg = np.array(g.degree())
 
     # accpath = '/home/dufresne/temp/20230728-accessibs/0671806_Sierra_Madre_undirected_acc05.txt'
-    # trans = calculate_trans_feats(g) # Clustering coefficient
-    clucoeffs = np.array(g.as_undirected().transitivity_local_undirected(mode='zero'))
+    ##########################################################
+
+    factor = 15
+    if isgeo:
+        pos = np.array([g.vs['y'], g.vs['x']]).T
+        posdeg = np.deg2rad(pos)
+        dists = sklearn.metrics.pairwise.haversine_distances(posdeg)
+        diamkm = (np.max(dists) * R)
+        radkm = diamkm / factor
+        # radkm = .5 # TODO: Remove this
+        info('Using a radius of :{}'.format(radkm))
+        bt = sklearn.neighbors.BallTree(posdeg, metric='haversine')
+        counts = bt.query_radius(posdeg, r=radkm/R, count_only=True)
+        g['featrad'] = radkm
+    else:
+        pos = np.array([g.vs['x'], g.vs['y']]).T
+        dists = sklearn.metrics.pairwise.euclidean_distances(pos)
+        diam = np.max(dists)
+        rad = diam / factor
+        bt = sklearn.neighbors.BallTree(pos, metric='euclidean')
+        counts = bt.query_radius(pos, r=rad, count_only=True)
+        g['featrad'] = rad
+
+    # clucoeffs = np.array(g.as_undirected().transitivity_local_undirected(mode='zero'))
+
     # bet = g.betweenness() # Betweenness centrality
     # accessib = calculate_accessib_feats(accpath) # Accessibility
 
-    feats = np.vstack((deg, clucoeffs)).T
+    feats = np.vstack((deg, counts)).T
     return feats, labels
 
 ##########################################################
@@ -132,13 +172,14 @@ def generate_graph(model, n, k):
         g = igraph.Graph.Watts_Strogatz(1, n, 2, p=rewprob)
     elif model.endswith('.graphml'):
         g = graph.simplify_graphml(model)
+        # g = g.induced_subgraph(range(800)).components().giant() # TODO: remove this
         if 'width' in g.edge_attributes(): del g.es['width']
+        # model = os.path.basename(model)
     elif model == 'wx':
         G = nx.waxman_graph(n, beta=0.15, alpha=0.1, L=None, domain=(0, 0, 1, 1), metric=None, seed=None)
         Gcc = sorted(nx.connected_components(G), key=len, reverse=True)
         G0 = G.subgraph(Gcc[0])
         g = G0
-        adj = nx.adjacency_matrix(g)
         vk = dict(G0.degree())
         vk = list(vk.values())
         k = np.mean(vk)
@@ -167,18 +208,8 @@ def generate_graph(model, n, k):
     g.simplify()
 
     coords = g.layout(layout='fr')
+    g['model'] = model
     return g, g.get_adjacency_sparse()
-
-##########################################################
-def calculate_trans_feats(g):
-    """Calculate clustering coefficient entropy """
-    info(inspect.stack()[0][3] + '()')
-    clucoeffs = np.array(g.as_undirected().transitivity_local_undirected())
-
-    # TODO: define what do when it is invalid
-    # valid = np.argwhere(~np.isnan(clucoeffs)).flatten()
-    # clucoeffs = clucoeffs[valid]
-    return clucoeffs
 
 ##########################################################
 def calculate_accessib_feats(accpath):
@@ -188,9 +219,9 @@ def calculate_accessib_feats(accpath):
     return accs
 
 ##########################################################
-def extract_features(adj, g):
+def extract_features(adj, g, isgeo):
     info(inspect.stack()[0][3] + '()')
-    vfeats, labels = extract_simple_feats_all(adj,  g)
+    vfeats, labels = extract_simple_feats_all(adj,  g, isgeo)
     return np.array(vfeats), labels
 
 #############################################################
@@ -346,6 +377,7 @@ def run_experiment(top, runid, coincexp, maxdist, outrootdir):
     gid = os.path.basename(top).replace('.graphml', '') if isgraphml else top
 
     n = 2000; k = 6
+    # n = 500; k = 6
     g, adj = generate_graph(top, n, k) # Create graph
     g.vs['origid'] = list(range(g.vcount()))
     info('n:{},k:{:.02f}'.format(g.vcount(), np.mean(g.degree())))
@@ -354,17 +386,36 @@ def run_experiment(top, runid, coincexp, maxdist, outrootdir):
         aux = np.array([g.vs['x'], g.vs['y']]).T
         xy = [[x, -y] for x, y in aux]
     else:
-        xy = None
+        xy = np.array(g.layout(layout='fr'))
+        g.vs['x'], g.vs['y']= xy[:, 0], xy[:, 1]
 
     # Coincidence between feature vectors
     pklpath = pjoin(outdir, '{}_{:02d}_coinc.pkl'.format(gid, runid))
     if isfile(pklpath):
         coinc0 = pickle.load(open(pklpath, 'rb'))
     else:
-        vfeats, featlbls = extract_features(adj, g)
+        vfeats, featlbls = extract_features(adj, g, isgraphml)
         coinc0 = get_coincidx_values(vfeats, coincexp, False)
         pickle.dump(coinc0, open(pklpath, 'wb'))
-        plt.hist(coinc0.flatten()); plt.savefig(pklpath.replace('.pkl', '.png'))
+
+        # Plot deg distrib
+        deg = vfeats[:, 0]
+        d = np.diff(np.unique(deg)).min()
+        left_of_first_bin = deg.min() - float(d)/2
+        right_of_last_bin = deg.max() + float(d)/2
+        plt.hist(deg, np.arange(left_of_first_bin, right_of_last_bin + d, d)); plt.xlabel('Degree')
+        plt.savefig(pjoin(outdir, '{}_{:02d}_distribdeg.png'.format(gid, runid)))
+        plt.close()
+
+        # Plot nneigh distrib
+        nneigh = vfeats[:, 0]
+        plt.hist(nneigh, bins=20); plt.xlabel('Number of nearby nodes')
+        plt.savefig(pjoin(outdir, '{}_{:02d}_distribnneigh.png'.format(gid, runid)))
+        plt.close()
+
+        # Plot coinc distrib
+        plt.hist(coinc0.flatten()); plt.xlabel('Coincidence index')
+        plt.savefig(pklpath.replace('.pkl', '.png')); plt.close()
 
     netorig = pjoin(outdir, '{}_{:02d}.pdf'.format(gid, runid))
     plotpath = pjoin(outdir, '{}_{:02d}_autorel.png'.format(gid, runid))
@@ -378,15 +429,15 @@ def run_experiment(top, runid, coincexp, maxdist, outrootdir):
     plot_curves_and_avg(means, '', plotpath)
 
     # for coincthresh in np.arange(.5, .99, .02):
-    # for coincthresh in np.arange(.5, .99, .2):
-    for coincthresh in [.78]: # TODO: REMOVE THIS
+    # for coincthresh in [.78]: # TODO: REMOVE THIS
+    for coincthresh in [.80, .85, .90, .95]: # TODO: REMOVE THIS
         expidstr = '{}_T{:.02f}_{:02d}'.format(gid, coincthresh, runid)
         info(expidstr)
 
         # Define plots paths
-        netcoinc1 = pjoin(dirlayout1, '{}.png'.format(expidstr))
-        netcoinc2 = pjoin(dirlayout2, '{}.png'.format(expidstr))
-        netcoinc3 = pjoin(dirlayout3, '{}.png'.format(expidstr))
+        netcoinc1 = pjoin(dirlayout1, '{}_netorig.png'.format(expidstr))
+        netcoinc2 = pjoin(dirlayout2, '{}_netcoinc.png'.format(expidstr))
+        netcoinc3 = pjoin(dirlayout3, '{}_netcoincgiant.png'.format(expidstr))
         if isfile(netcoinc1) and isfile(netcoinc2): continue
 
         coinc = get_coincidx_values(means, coincexp, False)
@@ -423,10 +474,12 @@ def run_experiment(top, runid, coincexp, maxdist, outrootdir):
             vcols.append(vcol)
 
         plot_graph(giant, None, None, giant.vs.degree(),
-                np.array(vcols)[giant.vs['origid']].tolist(), netcoinc3)
+                   np.array(vcols)[giant.vs['origid']].tolist(), netcoinc3)
 
         plot_graph(g, coords1, None, vsz, vcols, netcoinc1)
         plot_curves_and_avg_comm(means, '', vcols, expidstr, dirsignat)
+    # myutils.append_to_file('Counts of neighbor inside radius {}'.format(g.vs['featrad']),
+                           # pjoin(outdir, 'README.md'))
 
 ##########################################################
 def main(cfgpath, nprocs, readmepath, outrootdir):
